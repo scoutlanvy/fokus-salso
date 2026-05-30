@@ -1,0 +1,23 @@
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
+
+NOTION_TOKEN = "REDACTED_NOTION_TOKEN"
+DATABASE_ID = "REDACTED_DATABASE_ID"
+TIMEZONE = "Asia/Jakarta"
+
+SUBJECT_OPTIONS = [
+    "Anki",
+    "English",
+    "Linux",
+    "Programming",
+    "System Admin"
+]
+
+DEFAULT_HOURS = 0
+DEFAULT_MINUTES = 25
+DEFAULT_SECONDS = 0
+
+APP_TITLE = "Study Timer"
+WINDOW_SIZE = "520x420"
