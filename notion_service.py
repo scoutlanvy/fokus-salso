@@ -3,10 +3,7 @@ from notion_client import Client
 
 import config
 
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    from backports.zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo
 
 notion = Client(auth=config.NOTION_TOKEN)
 
