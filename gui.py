@@ -1,16 +1,8 @@
 import customtkinter as ctk
 
 import config
+from duration_picker import DurationPicker
 from timer_service import TimerService
-
-
-def validate_numeric(value: str, field_name: str) -> int:
-    stripped = value.strip()
-    if not stripped:
-        raise ValueError(f"{field_name} tidak boleh kosong")
-    if not stripped.isdigit():
-        raise ValueError(f"{field_name} harus angka")
-    return int(stripped)
 
 
 def run_app() -> None:
@@ -23,11 +15,12 @@ def run_app() -> None:
     app.resizable(False, False)
 
     selected_subject = ctk.StringVar(value=config.SUBJECT_OPTIONS[0])
-    hours_var = ctk.StringVar(value=str(config.DEFAULT_HOURS))
-    minutes_var = ctk.StringVar(value=str(config.DEFAULT_MINUTES))
-    seconds_var = ctk.StringVar(value=str(config.DEFAULT_SECONDS))
     status_var = ctk.StringVar(value="Ready")
-    countdown_var = ctk.StringVar(value=f"{config.DEFAULT_HOURS:02}:{config.DEFAULT_MINUTES:02}:{config.DEFAULT_SECONDS:02}")
+    countdown_var = ctk.StringVar(
+        value=f"{config.DEFAULT_HOURS:02}:{config.DEFAULT_MINUTES:02}:{config.DEFAULT_SECONDS:02}"
+    )
+
+    duration_picker = None
 
     def set_countdown(value: str) -> None:
         countdown_var.set(value)
@@ -40,22 +33,16 @@ def run_app() -> None:
         pause_button.configure(state=ctk.NORMAL if started and not paused else ctk.DISABLED)
         resume_button.configure(state=ctk.NORMAL if paused else ctk.DISABLED)
         reset_button.configure(state=ctk.NORMAL)
+        if duration_picker is not None:
+            duration_picker.set_enabled(not started)
 
     timer_service = TimerService(set_countdown, set_status, update_control_state)
 
     def start_timer() -> None:
-        if timer_service.is_running:
+        if timer_service.is_running or duration_picker is None:
             return
 
-        try:
-            hours = validate_numeric(hours_var.get(), "Hours")
-            minutes = validate_numeric(minutes_var.get(), "Minutes")
-            seconds = validate_numeric(seconds_var.get(), "Seconds")
-        except ValueError as exc:
-            status_var.set(str(exc))
-            return
-
-        total_seconds = hours * 3600 + minutes * 60 + seconds
+        total_seconds = duration_picker.get_total_seconds()
         if total_seconds <= 0:
             status_var.set("Durasi harus lebih dari 0 detik")
             return
@@ -71,64 +58,75 @@ def run_app() -> None:
 
     def reset_timer() -> None:
         timer_service.reset_timer()
-        countdown_var.set(timer_service.format_hms(
-            config.DEFAULT_HOURS * 3600 + config.DEFAULT_MINUTES * 60 + config.DEFAULT_SECONDS
-        ))
+        if duration_picker is not None:
+            duration_picker.set_hms(
+                config.DEFAULT_HOURS,
+                config.DEFAULT_MINUTES,
+                config.DEFAULT_SECONDS,
+            )
+        countdown_var.set(
+            timer_service.format_hms(
+                config.DEFAULT_HOURS * 3600
+                + config.DEFAULT_MINUTES * 60
+                + config.DEFAULT_SECONDS
+            )
+        )
 
     main_frame = ctk.CTkFrame(app, corner_radius=15)
-    main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+    main_frame.pack(fill="both", expand=True, padx=16, pady=16)
 
     header_label = ctk.CTkLabel(
         main_frame,
         text="⏱️ Notion Study Timer",
-        font=("Helvetica", 22, "bold")
+        font=("Helvetica", 22, "bold"),
     )
-    header_label.pack(pady=(10, 20))
+    header_label.pack(pady=(8, 12))
 
     subject_frame = ctk.CTkFrame(main_frame, corner_radius=12)
     subject_frame.pack(fill="x", padx=10, pady=(0, 15))
 
-    ctk.CTkLabel(subject_frame, text="Subject", anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=8)
+    ctk.CTkLabel(subject_frame, text="Subject", anchor="w").grid(
+        row=0, column=0, sticky="w", padx=10, pady=8
+    )
     subject_menu = ctk.CTkOptionMenu(
         subject_frame,
         values=config.SUBJECT_OPTIONS,
         variable=selected_subject,
-        width=220
+        width=220,
     )
     subject_menu.grid(row=0, column=1, padx=10, pady=8)
 
     input_frame = ctk.CTkFrame(main_frame, corner_radius=12)
-    input_frame.pack(fill="x", padx=10, pady=(0, 15))
+    input_frame.pack(fill="x", padx=10, pady=(0, 10))
 
-    ctk.CTkLabel(input_frame, text="Hours", anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=(10, 5))
-    ctk.CTkLabel(input_frame, text="Minutes", anchor="w").grid(row=0, column=1, sticky="w", padx=10, pady=(10, 5))
-    ctk.CTkLabel(input_frame, text="Seconds", anchor="w").grid(row=0, column=2, sticky="w", padx=10, pady=(10, 5))
-
-    hours_entry = ctk.CTkEntry(input_frame, textvariable=hours_var, width=100)
-    hours_entry.grid(row=1, column=0, padx=10, pady=(0, 10))
-    minutes_entry = ctk.CTkEntry(input_frame, textvariable=minutes_var, width=100)
-    minutes_entry.grid(row=1, column=1, padx=10, pady=(0, 10))
-    seconds_entry = ctk.CTkEntry(input_frame, textvariable=seconds_var, width=100)
-    seconds_entry.grid(row=1, column=2, padx=10, pady=(0, 10))
+    ctk.CTkLabel(input_frame, text="Duration", font=("Helvetica", 13, "bold")).pack(
+        anchor="w", padx=12, pady=(10, 0)
+    )
+    duration_picker = DurationPicker(input_frame)
+    duration_picker.pack(pady=(4, 10))
 
     countdown_frame = ctk.CTkFrame(main_frame, corner_radius=12)
-    countdown_frame.pack(fill="both", expand=True, padx=10, pady=(0, 15))
+    countdown_frame.pack(fill="x", padx=10, pady=(0, 10))
 
     countdown_label = ctk.CTkLabel(
         countdown_frame,
         textvariable=countdown_var,
-        font=("Consolas", 48, "bold")
+        font=("Consolas", 44, "bold"),
     )
-    countdown_label.pack(expand=True, pady=20)
+    countdown_label.pack(pady=16)
 
     button_frame = ctk.CTkFrame(main_frame, corner_radius=12)
-    button_frame.pack(fill="x", padx=10, pady=(0, 10))
+    button_frame.pack(fill="x", padx=10, pady=(0, 8))
 
     start_button = ctk.CTkButton(button_frame, text="Start", command=start_timer)
     start_button.grid(row=0, column=0, padx=8, pady=15, sticky="ew")
-    pause_button = ctk.CTkButton(button_frame, text="Pause", command=pause_timer, state=ctk.DISABLED)
+    pause_button = ctk.CTkButton(
+        button_frame, text="Pause", command=pause_timer, state=ctk.DISABLED
+    )
     pause_button.grid(row=0, column=1, padx=8, pady=15, sticky="ew")
-    resume_button = ctk.CTkButton(button_frame, text="Resume", command=resume_timer, state=ctk.DISABLED)
+    resume_button = ctk.CTkButton(
+        button_frame, text="Resume", command=resume_timer, state=ctk.DISABLED
+    )
     resume_button.grid(row=0, column=2, padx=8, pady=15, sticky="ew")
     reset_button = ctk.CTkButton(button_frame, text="Reset", command=reset_timer)
     reset_button.grid(row=0, column=3, padx=8, pady=15, sticky="ew")
@@ -136,7 +134,7 @@ def run_app() -> None:
     button_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
     status_label = ctk.CTkLabel(main_frame, textvariable=status_var, font=("Helvetica", 14))
-    status_label.pack(pady=(0, 10))
+    status_label.pack(pady=(0, 6))
 
     update_control_state(started=False)
     app.mainloop()
