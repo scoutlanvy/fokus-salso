@@ -1,0 +1,7 @@
+- Analisis dulu
+- Jangan langsung ubah kode
+- Tunggu persetujuan
+- Update PROJECT_OVERVIEW.md
+- Pertahankan fitur yang ada
+- Selalu akhiri analisis dengan Decision Summary dan rekomendasi yang jelas
+- Jika requirement ambigu atau memiliki lebih dari satu interpretasi, jangan mengubah kode. Ajukan pertanyaan klarifikasi terlebih dahulu.
