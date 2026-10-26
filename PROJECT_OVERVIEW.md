@@ -42,6 +42,7 @@ The application uses a 2-column dashboard layout:
 UI uses English language. Theme supports dark and light modes.
 Window is resizable (default 900x620).
 
+Manual duration starts at `00:00:00` and returns to that value on Reset.
 In Manual mode, duration can be set by scrolling or typing the center value in
 each Hours/Minutes/Seconds column. Scrolling down increases the value; scrolling
 up decreases it, wrapping at the limits. Dragging remains available outside the
