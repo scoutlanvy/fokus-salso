@@ -2,12 +2,15 @@ import sqlite3
 import threading
 import time
 import winsound
+from dataclasses import replace
+from uuid import uuid4
 from pathlib import Path
 from typing import Callable, Optional
 
 import config
 from session_repository import (
     save_session, get_pomodoro_state, complete_pomodoro_focus, consume_break_second,
+    ActiveTimer, load_active_timer, save_active_timer, clear_active_timer,
 )
 
 Callback = Callable[[str], None]
@@ -42,7 +45,88 @@ class TimerService:
         self._command_lock = threading.RLock()
         self._choice_event = threading.Event()
         self._choice = None
-        self._load_balance()
+        self._progress = None
+        self._restoring = False
+        self.storage_blocked = not self._load_balance()
+
+    def _checkpoint(self, timer):
+        save_active_timer(timer)
+        self._progress = timer
+
+    def _prepare_phase(self, phase, subject, seconds, return_to_choice=False):
+        if self._restoring:
+            self._restoring = False
+            return True
+        timer = ActiveTimer(str(uuid4()), "Manual" if phase == "manual" else "Pomodoro",
+                            subject, phase, seconds, seconds, return_to_choice)
+        return self._persist_with_retry(lambda: self._checkpoint(timer))
+
+    def restore_progress(self):
+        """Called after GUI initialization; recovered countdowns always start paused."""
+        try:
+            timer = load_active_timer()
+            if timer is not None and (timer.phase == "done" or (
+                    timer.phase == "break" and timer.remaining_seconds == 0
+                    and not timer.return_to_choice)):
+                clear_active_timer()
+                timer = None
+        except (OSError, sqlite3.Error) as error:
+            self.storage_blocked = True
+            self._storage_error(error)
+            self.update_control_state(False)
+            return None
+        if self.storage_blocked or timer is None:
+            return None
+        if timer.phase == "break" and timer.remaining_seconds == 0:
+            timer = replace(timer, phase="choice")
+        self._progress = timer
+        self.remaining_seconds = timer.remaining_seconds
+        self.current_phase = "starting" if timer.phase == "choice" else timer.phase
+        self.is_running = True
+        self.stop_event.clear()
+        if timer.phase == "choice":
+            target, args = self._restored_choice_loop, (timer.subject,)
+        else:
+            self.pause_event.set()
+            self._restoring = True
+            if timer.phase == "manual":
+                target, args = self.countdown_loop, (timer.total_seconds, timer.subject)
+            else:
+                target, args = self.pomodoro_loop, (
+                    timer.subject, timer.phase, timer.total_seconds, timer.return_to_choice)
+        self.timer_thread = threading.Thread(target=target, args=args, daemon=True)
+        self.timer_thread.start()
+        return timer
+
+    def _restored_choice_loop(self, subject):
+        choice = self._wait_for_choice()
+        if choice is not None:
+            self.pomodoro_loop(subject, *choice, return_to_choice=True)
+        else:
+            self.is_running = False
+
+    def suspend_for_close(self):
+        """Freeze and save before stopping. A failed save leaves the window usable."""
+        with self._command_lock:
+            if (self.is_running and not self.is_alarm_active
+                    and self.current_phase in ("manual", "focus", "break", "starting")):
+                self.pause_event.set()
+            try:
+                if self._progress is not None:
+                    save_active_timer(self._progress)
+            except (OSError, sqlite3.Error) as error:
+                if self.current_phase == "starting" and self._progress is not None:
+                    self.current_phase = self._progress.phase
+                self._storage_error(error)
+                self.set_status("Could not save progress - Resume to retry or close again")
+                self.update_control_state(True, True)
+                return False
+            self.stop_event.set()
+            self._choice_event.set()
+            self.stop_alarm()
+        if self.timer_thread is not None:
+            self.timer_thread.join()
+        return True
 
     def _load_balance(self) -> bool:
         try:
@@ -61,11 +145,17 @@ class TimerService:
     def _persist_with_retry(self, operation) -> bool:
         """Pause on failure. Resume retries the same transaction before proceeding."""
         while not self.stop_event.is_set():
+            while self.pause_event.is_set() and not self.stop_event.wait(0.05):
+                pass
             with self._command_lock:
                 if self.stop_event.is_set():
                     return False
+                if self.pause_event.is_set():
+                    continue
                 try:
-                    self.break_balance_seconds, self.cycle_position = operation()
+                    result = operation()
+                    if result is not None:
+                        self.break_balance_seconds, self.cycle_position = result
                     return True
                 except (OSError, sqlite3.Error) as error:
                     self.pause_event.set()
@@ -77,14 +167,9 @@ class TimerService:
         return False
 
     def _save_session(self, subject: str, total_seconds: int) -> bool:
-        try:
-            save_session(subject, total_seconds)
-        except (OSError, sqlite3.Error) as error:
-            message = f"Failed to save session to local database: {error}"
-            self.set_status(message)
-            if self.on_storage_error is not None:
-                self.on_storage_error(message)
-            return False
+        save_session(subject, total_seconds, self._progress)
+        if self._progress is not None:
+            self._progress = replace(self._progress, phase="done", remaining_seconds=0)
         return True
 
     def format_hms(self, total_seconds: int) -> str:
@@ -126,14 +211,17 @@ class TimerService:
         status: str,
         can_skip_break: bool = False,
     ) -> bool:
-        self.remaining_seconds = total_seconds
+        self.remaining_seconds = (self._progress.remaining_seconds
+                                  if self._progress is not None else total_seconds)
         self.skip_break_event.clear()
-        self.update_control_state(True, False, can_skip_break)
-        self.set_status(status)
+        self.update_control_state(True, self.pause_event.is_set(), can_skip_break)
+        self.set_status("Paused - Resume to continue" if self.pause_event.is_set() else status)
 
         self.set_countdown(self.format_hms(self.remaining_seconds))
         elapsed = 0.0
         previous = time.monotonic()
+        while self.pause_event.is_set() and not self.stop_event.wait(0.05):
+            previous = time.monotonic()
         while self.remaining_seconds > 0 and not self.stop_event.is_set():
             if can_skip_break and self.skip_break_event.is_set():
                 self.set_countdown("00:00:00")
@@ -155,19 +243,30 @@ class TimerService:
             # Do not catch up after a suspended machine or slow disk: only a
             # single displayed second can be awaiting its durable debit.
             elapsed = 0.0
-            if self.current_phase == "break":
-                try:
-                    if not self._persist_with_retry(consume_break_second):
-                        return False
-                except ValueError:
-                    self._load_balance()
-                    self.set_status("Break balance used by another window")
-                    return False
-                previous = time.monotonic()
             with self._command_lock:
                 if self.stop_event.is_set():
                     return False
-                self.remaining_seconds -= 1
+                if self.pause_event.is_set():
+                    continue
+            def tick():
+                timer = replace(self._progress, remaining_seconds=self.remaining_seconds - 1)
+                if self.current_phase == "break":
+                    result = consume_break_second(timer)
+                    self._progress = timer
+                else:
+                    self._checkpoint(timer)
+                    result = None
+                self.remaining_seconds = timer.remaining_seconds
+                return result
+            try:
+                if not self._persist_with_retry(tick):
+                    return False
+            except ValueError:
+                self._load_balance()
+                self.set_status("Break balance used by another window")
+                return False
+            previous = time.monotonic()
+            with self._command_lock:
                 self.set_countdown(self.format_hms(self.remaining_seconds))
                 if self.current_phase == "break":
                     self.update_control_state(True, False, can_skip_break)
@@ -176,20 +275,28 @@ class TimerService:
 
     def countdown_loop(self, total_seconds: int, subject: str) -> None:
         self.current_phase = "manual"
+        if not self._prepare_phase("manual", subject, total_seconds):
+            self.is_running = False
+            return
 
         completed = self._run_countdown(total_seconds, "Running")
         if completed:
             self.set_countdown("00:00:00")
-            if self._save_session(subject, total_seconds):
+            def complete():
+                if not self._save_session(subject, total_seconds):
+                    raise sqlite3.OperationalError("Failed to save session")
+            if self._persist_with_retry(complete):
                 self.set_status("Completed & saved")
-            else:
-                self.set_status("Completed (save failed)")
-            self._beep()
+                self._beep()
 
         self.is_running = False
         self.update_control_state(False, False, False)
 
     def _wait_for_choice(self):
+        if self._progress is not None:
+            if not self._persist_with_retry(lambda: self._checkpoint(
+                    replace(self._progress, phase="choice", remaining_seconds=0))):
+                return None
         with self._command_lock:
             if self.stop_event.is_set():
                 return None
@@ -204,28 +311,40 @@ class TimerService:
                     return None if self.stop_event.is_set() else self._choice
         return None
 
-    def pomodoro_loop(self, subject: str, action="focus", duration=0) -> None:
-        return_to_choice = action == "focus"
+    def pomodoro_loop(self, subject: str, action="focus", duration=0, return_to_choice=None) -> None:
+        if return_to_choice is None:
+            return_to_choice = action == "focus"
         try:
             while not self.stop_event.is_set():
                 if action == "focus":
                     self.current_phase = "focus"
-                    focus_seconds = config.POMODORO_FOCUS_SECONDS
+                    focus_seconds = (self._progress.total_seconds if self._restoring
+                                     else config.POMODORO_FOCUS_SECONDS)
+                    if not self._prepare_phase("focus", subject, focus_seconds, True):
+                        break
                     status = f"Pomodoro focus {self.cycle_position + 1}/{config.POMODORO_TOTAL_SESSIONS}"
                     if not self._run_countdown(focus_seconds, status):
                         break
-                    if not self._persist_with_retry(
-                        lambda: complete_pomodoro_focus(subject, focus_seconds)
-                    ):
+                    def complete_focus():
+                        result = complete_pomodoro_focus(subject, focus_seconds, self._progress)
+                        self._progress = replace(self._progress, phase="choice", remaining_seconds=0)
+                        return result
+                    if not self._persist_with_retry(complete_focus):
                         break
                     self.set_status("Focus completed & saved - break balance added")
                     self._beep()
                 else:
                     self.current_phase = "break"
+                    if not self._prepare_phase("break", subject, duration, return_to_choice):
+                        break
                     completed = self._run_countdown(duration, "Using break balance", can_skip_break=True)
                     if self.stop_event.is_set():
                         break
                     if completed:
+                        destination = "choice" if return_to_choice else "done"
+                        if not self._persist_with_retry(lambda: self._checkpoint(
+                                replace(self._progress, phase=destination, remaining_seconds=0))):
+                            break
                         self._beep()
                         if not return_to_choice:
                             break
@@ -249,12 +368,26 @@ class TimerService:
 
     def _launch(self, target, args, pomodoro=False) -> bool:
         with self._command_lock:
-            if self.is_running or (self.timer_thread is not None and self.timer_thread.is_alive()):
+            if self.storage_blocked or self.is_running or (self.timer_thread is not None and self.timer_thread.is_alive()):
                 return False
             if pomodoro and not self._load_balance():
                 return False
             if pomodoro and len(args) > 1 and args[1] == "break" and args[2] > self.break_balance_seconds:
                 return False
+            if not pomodoro:
+                phase, seconds, subject = "manual", args[0], args[1]
+            elif len(args) > 1 and args[1] == "break":
+                phase, seconds, subject = "break", args[2], args[0]
+            else:
+                phase, seconds, subject = "focus", config.POMODORO_FOCUS_SECONDS, args[0]
+            progress = ActiveTimer(str(uuid4()), "Pomodoro" if pomodoro else "Manual",
+                                   subject, phase, seconds, seconds, phase == "focus")
+            try:
+                self._checkpoint(progress)
+            except (OSError, sqlite3.Error) as error:
+                self._storage_error(error)
+                return False
+            self._restoring = True
             self.stop_event.clear()
             self.pause_event.clear()
             self.skip_break_event.clear()
@@ -300,7 +433,13 @@ class TimerService:
     def pause_timer(self) -> None:
         if not self.is_running or self.is_alarm_active or self.pause_event.is_set() or self.current_phase not in ("manual", "focus", "break"):
             return
-        self.pause_event.set()
+        with self._command_lock:
+            self.pause_event.set()
+            try:
+                if self._progress is not None:
+                    save_active_timer(self._progress)
+            except (OSError, sqlite3.Error) as error:
+                self._storage_error(error)
         self.set_status("Paused")
         self.update_control_state(started=True, paused=True, can_skip_break=False)
 
@@ -322,8 +461,18 @@ class TimerService:
         elif self.current_phase == "long_break" and config.POMODORO_ALLOW_SKIP_LONG_BREAK:
             self.skip_break_event.set()
 
-    def reset_timer(self) -> None:
+    def reset_timer(self) -> bool:
         with self._command_lock:
+            if self.storage_blocked:
+                return False
+            self.pause_event.set()
+            try:
+                clear_active_timer()
+            except (OSError, sqlite3.Error) as error:
+                self._storage_error(error)
+                self.update_control_state(self.is_running, True)
+                return False
+            self._progress = None
             self.stop_event.set()
             self._choice_event.set()
             self.stop_alarm()
@@ -332,3 +481,9 @@ class TimerService:
             self.remaining_seconds = 0
             self.set_status("Ready")
             self.update_control_state(started=False, paused=False, can_skip_break=False)
+        if self.timer_thread is not None and self.timer_thread is not threading.current_thread():
+            self.timer_thread.join()
+        self.is_running = False
+        self.current_phase = "manual"
+        self.update_control_state(False, False, False)
+        return True

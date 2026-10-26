@@ -6,9 +6,23 @@ import config
 from duration_picker import DurationPicker
 from history_panel import HistoryPanel
 from timer_service import TimerService
+from instance_lock import InstanceLock, AlreadyRunningError
 
 
 def run_app() -> None:
+    try:
+        with InstanceLock(config.DATABASE_PATH):
+            _run_app()
+    except (AlreadyRunningError, OSError) as error:
+        root = ctk.CTk()
+        root.withdraw()
+        try:
+            messagebox.showerror("Study Timer", str(error), parent=root)
+        finally:
+            root.destroy()
+
+
+def _run_app() -> None:
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
 
@@ -87,6 +101,11 @@ def run_app() -> None:
             state=ctk.NORMAL if available else ctk.DISABLED,
         )
         choose_duration_button.configure(state=ctk.NORMAL if available else ctk.DISABLED)
+        if timer_service.storage_blocked:
+            for widget in (primary_button, reset_button, mode_menu, subject_menu,
+                           break_all_button, choose_duration_button):
+                widget.configure(state=ctk.DISABLED)
+            duration_picker.set_enabled(False)
 
     def show_storage_error(message: str) -> None:
         if closing:
@@ -122,8 +141,10 @@ def run_app() -> None:
 
     def close_app() -> None:
         nonlocal closing
+        if not timer_service.suspend_for_close():
+            update_control_state(timer_service.is_running)
+            return
         closing = True
-        timer_service.reset_timer()
         app.destroy()
 
     app.protocol("WM_DELETE_WINDOW", close_app)
@@ -179,7 +200,19 @@ def run_app() -> None:
         if duration_dialog is not None and duration_dialog.winfo_exists():
             duration_dialog.destroy()
         duration_dialog = None
-        timer_service.reset_timer()
+        if not timer_service.reset_timer():
+            return
+        errors = []
+        while True:
+            try:
+                event = ui_events.get_nowait()
+            except queue.Empty:
+                break
+            if event[0] == "error":
+                errors.append(event)
+        for event in errors:
+            ui_events.put(event)
+        update_control_state(False)
         if duration_picker is not None and selected_mode.get() == "Manual":
             duration_picker.set_hms(
                 config.DEFAULT_HOURS,
@@ -367,5 +400,17 @@ def run_app() -> None:
     history_panel.pack(fill="both", expand=True, padx=8, pady=8)
 
     set_mode(selected_mode.get())
+    restored = timer_service.restore_progress()
+    if restored is not None:
+        selected_subject.set(restored.subject)
+        set_mode(restored.mode)
+        if restored.mode == "Manual":
+            hours, rest = divmod(restored.total_seconds, 3600)
+            minutes, seconds = divmod(rest, 60)
+            duration_picker.set_hms(hours, minutes, seconds)
+        countdown_var.set(timer_service.format_hms(restored.remaining_seconds))
+        status_var.set("Choose: continue focus or use your break balance"
+                       if restored.phase == "choice" else "Paused - Resume to continue")
+    update_control_state(timer_service.is_running)
     app.after(50, process_ui_events)
     app.mainloop()

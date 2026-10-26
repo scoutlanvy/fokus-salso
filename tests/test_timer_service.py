@@ -66,6 +66,14 @@ def test_manual_session_saved_before_alarm_and_finishes_after_acknowledgement(
     monkeypatch.setattr(service, "_save_session", save)
     service.start_timer(25, "Anki")
     try:
+        if not save_succeeds:
+            deadline = time.monotonic() + 2
+            while not service.pause_event.is_set() and time.monotonic() < deadline:
+                threading.Event().wait(0.01)
+            assert service.pause_event.is_set()
+            assert not service.is_alarm_active
+            assert saved == [("Anki", 25)]
+            return
         assert alarm_ready.wait(2)
         assert saved == [("Anki", 25)]
         assert statuses[-1] == (

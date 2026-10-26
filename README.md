@@ -32,7 +32,7 @@ Atau jalankan dari PowerShell:
 .\.venv\Scripts\python.exe main.py
 ```
 
-Aplikasi selalu dibuka dalam mode **Pomodoro**, dengan fokus 25 menit yang menunggu tombol **Start** ditekan. Pilih subjek jika diperlukan. Untuk mode Manual, pilih **Manual** dan atur durasi terlebih dahulu. Setelah alarm Pomodoro dihentikan dengan **Stop Alarm**, pilih **Continue Focus** atau gunakan saldo istirahat. Fase berikutnya menunggu pilihan pengguna.
+Tanpa progres tersimpan, aplikasi dibuka dalam mode **Pomodoro**, dengan fokus 25 menit yang menunggu tombol **Start** ditekan. Pilih subjek jika diperlukan. Untuk mode Manual, pilih **Manual** dan atur durasi terlebih dahulu. Setelah alarm Pomodoro dihentikan dengan **Stop Alarm**, pilih **Continue Focus** atau gunakan saldo istirahat. Fase berikutnya menunggu pilihan pengguna.
 
 ## Mencoba Pomodoro dengan cepat
 
@@ -43,7 +43,19 @@ Klik dua kali `Coba Pomodoro.vbs`. Mode ini memakai fokus 10 detik dan kredit is
 - Data normal: `%LOCALAPPDATA%\StudyTimer\study_sessions.sqlite3`
 - Data percobaan: `%LOCALAPPDATA%\StudyTimerPreview\study_sessions.sqlite3`
 
-Riwayat, saldo istirahat, dan posisi siklus Pomodoro tetap tersimpan setelah aplikasi ditutup. Timer yang sedang berjalan tidak dipulihkan saat aplikasi dibuka kembali. Untuk membuat cadangan, tutup aplikasi lalu salin file database normal ke lokasi lain.
+Riwayat, saldo istirahat, posisi siklus Pomodoro, dan progres timer tersimpan setelah aplikasi ditutup. Untuk membuat cadangan, tutup aplikasi lalu salin file database normal ke lokasi lain.
+
+## Melanjutkan progres
+
+Progres Manual, fokus Pomodoro, dan istirahat disimpan setiap detik. Jika aplikasi ditutup pada `24:52`, saat dibuka kembali sisa waktunya tetap `24:52` dalam keadaan **Pause**. Tekan **Resume** untuk melanjutkan; waktu selama aplikasi tertutup tidak dihitung. Mode dan subjek ikut dipulihkan dan terkunci selama sesi aktif.
+
+Progres juga dipulihkan dari detik terakhir yang berhasil disimpan jika aplikasi crash atau komputer mati mendadak. **Reset** membuang progres aktif dan mengembalikan durasi awal, tanpa menghapus riwayat atau saldo istirahat.
+
+Jika aplikasi ditutup saat alarm berbunyi, sesi yang sudah selesai tidak dicatat ulang dan alarm tidak diputar saat dibuka kembali. Pomodoro menampilkan pilihan sesi berikutnya; Manual kembali siap memulai.
+
+Jika penyimpanan gagal, timer berhenti sementara. Tekan **Resume** untuk mencoba kembali. Jika gagal menyimpan saat menutup, jendela tetap terbuka agar penutupan bisa dicoba lagi. Jika progres tidak dapat dibaca, kontrol timer dinonaktifkan untuk melindungi data tersimpan; tutup dan buka kembali setelah masalah penyimpanan diperbaiki.
+
+Hanya satu jendela diizinkan untuk setiap database. Aplikasi normal dan mode percobaan tetap dapat dibuka bersamaan karena memakai database terpisah.
 
 ## Pemeriksaan untuk pengembangan
 

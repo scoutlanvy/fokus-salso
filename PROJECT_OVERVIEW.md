@@ -12,6 +12,7 @@ preview usage, and database paths are documented in [README.md](README.md).
 - `session_repository.py`: SQLite persistence and queries.
 - `history_panel.py`: subject summaries and recent sessions.
 - `config.py`: timezone, storage paths, subjects, durations, and theme values.
+- `instance_lock.py`: Windows named mutex keyed by the resolved database path.
 
 ## Storage and Failure Handling
 
@@ -19,8 +20,7 @@ Session records contain subject, duration in seconds, and time in `Asia/Jakarta`
 Manual sessions save when countdown completes; Pomodoro sessions save when focus
 completes, before the alarm. Records from previous external services are not migrated.
 
-Manual save errors show a notification without stopping the timer. Pomodoro write
-failures pause progress: Resume retries the pending transaction; Reset cancels it.
+Timer write failures pause progress: Resume retries the pending transaction; Reset cancels it.
 History read failures show an unavailable message without closing the application.
 
 The `pomodoro_state` table holds break balance in seconds and position in the
@@ -28,14 +28,38 @@ four-focus reward cycle. Existing databases gain this table with zero balance an
 position without changing session history. Saving focus, awarding credit, and
 advancing the cycle form one SQLite transaction.
 
-Each running break second is committed before the displayed timer advances. A
-forced shutdown can leave at most one uncommitted second. Active timers are not restored.
+Each running second is committed before the displayed timer advances. Break debits
+and their remaining-time checkpoints share a transaction.
+
+## Progress Recovery
+
+`active_timer` stores one session UUID, mode, subject, phase, original duration,
+remaining whole seconds, and whether a break returns to the Pomodoro choice.
+Start persists progress before launching a worker. Pause, phase changes, and
+normal close also save progress. Offline time and fractional seconds are not counted.
+
+Session completion writes history, any Pomodoro credit, a `timer_completions`
+UUID marker, and the next progress state in one transaction. Repeating completion
+with the same UUID cannot duplicate history or rewards. Manual completion always
+records the original duration, including work before a restart.
+
+After GUI construction, unfinished countdowns restore paused with Resume and
+locked mode/subject controls. A completed focus restores to choice without an
+alarm; a completed Manual or idle break restores to default idle. A break checkpoint
+at zero is similarly treated as completed, even if a crash interrupted its transition.
+Reset removes only active progress and joins the old worker before accepting a new session.
+
+Close freezes progress under the command lock, saves it, then stops and joins the
+worker. A write failure keeps the window open; countdowns stay paused. A recovery
+read failure blocks timer controls to prevent overwriting unread progress.
+The Windows mutex is acquired before database initialization and released on exit
+or process death. Normal and preview paths use different mutexes and databases.
 
 ## Interface and Duration Input
 
-Every launch defaults to Pomodoro without remembering the previous mode. The
-existing mode initialization displays the configured focus duration and Pomodoro
-controls without starting the timer. Manual remains selectable from the mode menu.
+Without saved progress, launch defaults to Pomodoro. Mode initialization displays
+the configured focus duration and controls without starting the timer. Recovery
+then applies the saved mode and remaining time. Manual remains selectable when idle.
 
 The resizable window defaults to 900x620. The left column contains timer controls
 and scrolls in small windows; the right contains history. Subject defaults to `Umum`
@@ -77,8 +101,9 @@ greater than the balance, with minutes and seconds limited to 0–59. Cancel cha
 nothing. Break controls are also available when Pomodoro is idle.
 
 Only running break seconds are deducted. Paused time, alarm time, and decision
-time cost nothing. Skip Break returns to decision controls; Reset or closing
-cancels the active timer and preserves unused credit. A break between focuses
+time cost nothing. Skip Break returns to decision controls; Reset cancels the
+active timer, while closing preserves it for recovery. Both preserve unused credit.
+A break between focuses
 returns to decision controls after acknowledgement; a break started from idle
 returns to idle. `POMODORO_ALLOW_SKIP_LONG_BREAK` no longer controls banked breaks.
 

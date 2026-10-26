@@ -214,11 +214,11 @@ def test_failed_debit_pauses_and_retries_pending_second(service, monkeypatch, fa
     original = timer_service.consume_break_second
     calls = []
 
-    def fail_once():
+    def fail_once(*args):
         calls.append(1)
         if len(calls) == 1:
             raise sqlite3.OperationalError("disk full")
-        return original()
+        return original(*args)
 
     monkeypatch.setattr(timer_service, "consume_break_second", fail_once)
     assert service.start_break(1)
