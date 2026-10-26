@@ -6,6 +6,7 @@ DATA_DIRECTORY = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "StudyTimer
 DATABASE_PATH = DATA_DIRECTORY / "study_sessions.sqlite3"
 
 SUBJECT_OPTIONS = [
+    "Umum",
     "Anki",
     "English",
     "Linux",

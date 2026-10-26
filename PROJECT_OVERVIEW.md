@@ -1,6 +1,14 @@
 Study Timer
 ===========
 
+Quick Launch (Windows)
+----------------------
+
+Double-click `Study Timer.vbs` to open the application without a terminal.
+The launcher uses `.venv\Scripts\pythonw.exe` from the project folder.
+For desktop access, create a shortcut to `Study Timer.vbs` using Windows
+Send to > Desktop (create shortcut). Keep the launcher inside the project folder.
+
 Desktop application using CustomTkinter to track study sessions through manual
 or Pomodoro timers. Completed focus sessions are saved locally to SQLite,
 without connection to external services.
@@ -40,6 +48,10 @@ The application uses a 2-column dashboard layout:
   recent sessions. The panel automatically refreshes after a session is successfully saved.
 
 UI uses English language. Theme supports dark and light modes.
+The default subject is `Umum` in both Manual and Pomodoro modes, so a session
+can start without choosing a specific category. Other subjects remain selectable.
+Sessions under `Umum` are saved and displayed in history like any other subject;
+existing history is unchanged.
 Window is resizable (default 900x620).
 
 Manual duration starts at `00:00:00` and returns to that value on Reset.
