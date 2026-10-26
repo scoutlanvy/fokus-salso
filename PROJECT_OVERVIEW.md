@@ -42,6 +42,16 @@ The application uses a 2-column dashboard layout:
 UI uses English language. Theme supports dark and light modes.
 Window is resizable (default 900x620).
 
+In Manual mode, duration can be set by scrolling or typing the center value in
+each Hours/Minutes/Seconds column. Scrolling down increases the value; scrolling
+up decreases it, wrapping at the limits. Dragging remains available outside the
+text inputs without moving keyboard focus on hover. Hours accept 0-99, minutes
+and seconds accept 0-59, with up to two digits per input. Enter, leaving the input,
+or pressing Start commits the value and formats it with two digits. Empty or
+out-of-range input reverts to the previous committed value. Duration editing is
+disabled while running or paused and in Pomodoro mode; Pomodoro durations remain
+configured in `config.py`.
+
 The primary timer button shows Start when idle, Pause while running, and Resume
 while paused. It returns to Start after reset or completion. Skip Break remains
 visible but disabled while a Pomodoro break is paused, and is enabled only when

@@ -47,13 +47,24 @@ class WheelColumn(ctk.CTkFrame):
         )
         self.prev_label.pack(pady=(6, 0))
 
-        self.current_label = ctk.CTkLabel(
+        self._input_var = ctk.StringVar(value=self._format_value(initial))
+        self.current_entry = ctk.CTkEntry(
             self.wheel_frame,
-            text="",
+            textvariable=self._input_var,
             font=("Consolas", 22, "bold"),
+            width=width,
             height=30,
+            border_width=0,
+            corner_radius=0,
+            fg_color=("gray90", "gray17"),
+            justify="center",
+            validate="key",
+            validatecommand=(self.register(self._validate_input), "%P"),
         )
-        self.current_label.pack(pady=0)
+        self.current_entry.pack(pady=0)
+        self.current_entry.bind("<Return>", self._commit_input)
+        self.current_entry.bind("<FocusOut>", self._commit_input)
+        self.current_entry.bind("<MouseWheel>", self._on_mousewheel)
 
         self.next_label = ctk.CTkLabel(
             self.wheel_frame,
@@ -66,13 +77,12 @@ class WheelColumn(ctk.CTkFrame):
 
         self._bind_wheel_events(self)
         self._bind_wheel_events(self.wheel_frame)
-        for widget in (self.prev_label, self.current_label, self.next_label):
+        for widget in (self.prev_label, self.next_label):
             self._bind_wheel_events(widget)
 
         self._refresh_labels()
 
     def _bind_wheel_events(self, widget) -> None:
-        widget.bind("<Enter>", lambda _e: widget.focus_set())
         widget.bind("<MouseWheel>", self._on_mousewheel)
         widget.bind("<Button-1>", self._on_drag_start)
         widget.bind("<B1-Motion>", self._on_drag_motion)
@@ -80,6 +90,19 @@ class WheelColumn(ctk.CTkFrame):
 
     def _format_value(self, value: int) -> str:
         return f"{value:02d}"
+
+    def _validate_input(self, proposed: str) -> bool:
+        return len(proposed) <= 2 and all("0" <= char <= "9" for char in proposed)
+
+    def _commit_input(self, _event=None) -> None:
+        if not self._enabled:
+            return
+        text = self._input_var.get()
+        if text and self._validate_input(text):
+            value = int(text)
+            if self.minimum <= value <= self.maximum:
+                self._value = value
+        self._refresh_labels()
 
     def _wrap(self, value: int) -> int:
         span = self.maximum - self.minimum + 1
@@ -89,21 +112,22 @@ class WheelColumn(ctk.CTkFrame):
     def _step(self, delta: int) -> None:
         if not self._enabled or delta == 0:
             return
+        self._commit_input()
         self._value = self._wrap(self._value + delta)
         self._refresh_labels()
 
     def _refresh_labels(self) -> None:
         self.prev_label.configure(text=self._format_value(self._wrap(self._value - 1)))
-        self.current_label.configure(text=self._format_value(self._value))
+        self._input_var.set(self._format_value(self._value))
         self.next_label.configure(text=self._format_value(self._wrap(self._value + 1)))
 
     def _on_mousewheel(self, event) -> None:
         if not self._enabled:
             return
         if event.delta > 0:
-            self._step(1)
-        elif event.delta < 0:
             self._step(-1)
+        elif event.delta < 0:
+            self._step(1)
 
     def _on_drag_start(self, event) -> None:
         if not self._enabled:
@@ -131,6 +155,7 @@ class WheelColumn(ctk.CTkFrame):
         self._drag_accumulator = 0
 
     def get_value(self) -> int:
+        self._commit_input()
         return self._value
 
     def set_value(self, value: int) -> None:
@@ -138,7 +163,10 @@ class WheelColumn(ctk.CTkFrame):
         self._refresh_labels()
 
     def set_enabled(self, enabled: bool) -> None:
+        self._commit_input()
         self._enabled = enabled
+        self._drag_y = None
+        self._drag_accumulator = 0
         if enabled:
             side_color = ("gray55", "gray45")
             center_color = ("gray10", "gray90")
@@ -147,7 +175,10 @@ class WheelColumn(ctk.CTkFrame):
             center_color = ("gray45", "gray55")
         self.prev_label.configure(text_color=side_color)
         self.next_label.configure(text_color=side_color)
-        self.current_label.configure(text_color=center_color)
+        self.current_entry.configure(
+            text_color=center_color,
+            state=ctk.NORMAL if enabled else ctk.DISABLED,
+        )
 
 
 class DurationPicker(ctk.CTkFrame):
