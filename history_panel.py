@@ -7,6 +7,8 @@ from session_repository import get_recent_sessions, get_summary_by_subject
 
 
 def format_duration(total_seconds: int) -> str:
+    if 0 < total_seconds < 60:
+        return f"{total_seconds}s"
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     if hours > 0:

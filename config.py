@@ -2,7 +2,10 @@ import os
 from pathlib import Path
 
 TIMEZONE = "Asia/Jakarta"
-DATA_DIRECTORY = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "StudyTimer"
+PREVIEW_MODE = os.environ.get("STUDY_TIMER_PREVIEW") == "1"
+DATA_DIRECTORY = Path(os.environ.get("LOCALAPPDATA", Path.home())) / (
+    "StudyTimerPreview" if PREVIEW_MODE else "StudyTimer"
+)
 DATABASE_PATH = DATA_DIRECTORY / "study_sessions.sqlite3"
 
 SUBJECT_OPTIONS = [
@@ -24,11 +27,16 @@ POMODORO_LONG_BREAK_MINUTES = 15
 POMODORO_TOTAL_SESSIONS = 4
 POMODORO_ALLOW_SKIP_LONG_BREAK = False
 
+# Preview runs the same flow with short durations and a separate database.
+POMODORO_FOCUS_SECONDS = 10 if PREVIEW_MODE else POMODORO_FOCUS_MINUTES * 60
+POMODORO_SHORT_BREAK_SECONDS = 5 if PREVIEW_MODE else POMODORO_SHORT_BREAK_MINUTES * 60
+POMODORO_LONG_BREAK_SECONDS = 15 if PREVIEW_MODE else POMODORO_LONG_BREAK_MINUTES * 60
+
 MAX_HOURS = 99
 MAX_MINUTES = 59
 MAX_SECONDS = 59
 
-APP_TITLE = "Study Timer"
+APP_TITLE = "Study Timer - TEST MODE" if PREVIEW_MODE else "Study Timer"
 WINDOW_SIZE = "900x620"
 WINDOW_RESIZABLE = True
 

@@ -210,7 +210,7 @@ class TimerService:
             while not self.stop_event.is_set():
                 if action == "focus":
                     self.current_phase = "focus"
-                    focus_seconds = config.POMODORO_FOCUS_MINUTES * 60
+                    focus_seconds = config.POMODORO_FOCUS_SECONDS
                     status = f"Pomodoro focus {self.cycle_position + 1}/{config.POMODORO_TOTAL_SESSIONS}"
                     if not self._run_countdown(focus_seconds, status):
                         break

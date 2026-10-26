@@ -53,8 +53,8 @@ def complete_pomodoro_focus(subject: str, total_seconds: int) -> Tuple[int, int]
             "SELECT balance_seconds, cycle_position FROM pomodoro_state WHERE id = 1"
         ).fetchone()
         position = (position + 1) % config.POMODORO_TOTAL_SESSIONS
-        reward = (config.POMODORO_LONG_BREAK_MINUTES if position == 0
-                  else config.POMODORO_SHORT_BREAK_MINUTES) * 60
+        reward = (config.POMODORO_LONG_BREAK_SECONDS if position == 0
+                  else config.POMODORO_SHORT_BREAK_SECONDS)
         connection.execute(
             "INSERT INTO study_sessions (subject, duration_seconds, recorded_at) VALUES (?, ?, ?)",
             (subject, total_seconds, recorded_at),

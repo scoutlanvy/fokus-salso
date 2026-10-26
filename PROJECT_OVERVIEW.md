@@ -9,6 +9,13 @@ The launcher uses `.venv\Scripts\pythonw.exe` from the project folder.
 For desktop access, create a shortcut to `Study Timer.vbs` using Windows
 Send to > Desktop (create shortcut). Keep the launcher inside the project folder.
 
+For a quick trial, double-click `Coba Pomodoro.vbs`. This opens TEST MODE directly
+in Pomodoro, with 10-second focus and break rewards of 5, 5, 5, then 15 seconds.
+It sets `STUDY_TIMER_PREVIEW=1` only for its child process and stores test history,
+balance, and cycle position in `%LOCALAPPDATA%\StudyTimerPreview`. Close that
+window and launch Study Timer normally to return to 25-minute focus and the
+original database. No normal sessions or balances are modified by the trial.
+
 Desktop application using CustomTkinter to track study sessions through manual
 or Pomodoro timers. Completed focus sessions are saved locally to SQLite,
 without connection to external services.

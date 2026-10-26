@@ -18,7 +18,7 @@ def run_app() -> None:
     app.resizable(config.WINDOW_RESIZABLE, config.WINDOW_RESIZABLE)
 
     selected_subject = ctk.StringVar(value=config.SUBJECT_OPTIONS[0])
-    selected_mode = ctk.StringVar(value="Manual")
+    selected_mode = ctk.StringVar(value="Pomodoro" if config.PREVIEW_MODE else "Manual")
     status_var = ctk.StringVar(value="Ready")
     countdown_var = ctk.StringVar(
         value=f"{config.DEFAULT_HOURS:02}:{config.DEFAULT_MINUTES:02}:{config.DEFAULT_SECONDS:02}"
@@ -148,7 +148,7 @@ def run_app() -> None:
             duration_label.pack_forget()
             duration_picker.pack_forget()
             status_var.set("Pomodoro ready")
-            countdown_var.set(timer_service.format_hms(config.POMODORO_FOCUS_MINUTES * 60))
+            countdown_var.set(timer_service.format_hms(config.POMODORO_FOCUS_SECONDS))
         update_control_state(timer_service.is_running)
 
     def start_timer() -> None:
@@ -156,7 +156,7 @@ def run_app() -> None:
             return
 
         if selected_mode.get() == "Pomodoro":
-            countdown_var.set(timer_service.format_hms(config.POMODORO_FOCUS_MINUTES * 60))
+            countdown_var.set(timer_service.format_hms(config.POMODORO_FOCUS_SECONDS))
             timer_service.start_pomodoro(selected_subject.get())
             return
 
@@ -194,7 +194,7 @@ def run_app() -> None:
                 )
             )
         else:
-            countdown_var.set(timer_service.format_hms(config.POMODORO_FOCUS_MINUTES * 60))
+            countdown_var.set(timer_service.format_hms(config.POMODORO_FOCUS_SECONDS))
             status_var.set("Pomodoro ready")
 
     def skip_break() -> None:
@@ -313,6 +313,9 @@ def run_app() -> None:
     pomodoro_info = ctk.CTkLabel(
         input_frame,
         text=(
+            "TEST MODE: Focus 10 sec. Save 5 sec break; 15 sec every 4th focus.\n"
+            "Test balance and history are separate."
+            if config.PREVIEW_MODE else
             f"Focus {config.POMODORO_FOCUS_MINUTES} min. Save "
             f"{config.POMODORO_SHORT_BREAK_MINUTES} min break; "
             f"{config.POMODORO_LONG_BREAK_MINUTES} min every {config.POMODORO_TOTAL_SESSIONS}th focus.\n"
@@ -363,6 +366,6 @@ def run_app() -> None:
     history_panel = HistoryPanel(right_frame, compact=True)
     history_panel.pack(fill="both", expand=True, padx=8, pady=8)
 
-    update_control_state(started=False)
+    set_mode(selected_mode.get())
     app.after(50, process_ui_events)
     app.mainloop()
