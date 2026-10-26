@@ -25,11 +25,16 @@ def run_app() -> None:
 
     duration_picker = None
     history_panel = None
+    closing = False
 
     def set_countdown(value: str) -> None:
+        if closing:
+            return
         countdown_var.set(value)
 
     def set_status(value: str) -> None:
+        if closing:
+            return
         status_var.set(value)
         if history_panel is not None and ("saved" in value.lower() or "completed" in value.lower()):
             app.after(100, history_panel.refresh)
@@ -39,7 +44,11 @@ def run_app() -> None:
         paused: bool = False,
         can_skip_break: bool = False,
     ) -> None:
-        if not started:
+        if closing:
+            return
+        if timer_service.is_alarm_active:
+            primary_button.configure(text="Stop Alarm", command=timer_service.stop_alarm)
+        elif not started:
             primary_button.configure(text="Start", command=start_timer)
         elif paused:
             primary_button.configure(text="Resume", command=resume_timer)
@@ -57,6 +66,8 @@ def run_app() -> None:
             duration_picker.set_enabled(not started and selected_mode.get() == "Manual")
 
     def show_storage_error(message: str) -> None:
+        if closing:
+            return
         app.after(
             0,
             lambda: messagebox.showerror("Save failed", message, parent=app),
@@ -68,6 +79,15 @@ def run_app() -> None:
         update_control_state,
         on_storage_error=show_storage_error,
     )
+
+    def close_app() -> None:
+        nonlocal closing
+        closing = True
+        timer_service.stop_event.set()
+        timer_service.stop_alarm()
+        app.destroy()
+
+    app.protocol("WM_DELETE_WINDOW", close_app)
 
     def set_mode(mode: str) -> None:
         selected_mode.set(mode)

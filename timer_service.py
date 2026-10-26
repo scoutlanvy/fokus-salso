@@ -27,6 +27,8 @@ class TimerService:
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self.skip_break_event = threading.Event()
+        self.alarm_stop_event = threading.Event()
+        self.is_alarm_active = False
         self.remaining_seconds = 0
         self.is_running = False
         self.current_phase = "manual"
@@ -49,8 +51,22 @@ class TimerService:
         return f"{hours:02}:{minutes:02}:{seconds:02}"
 
     def _beep(self) -> None:
-        for _ in range(3):
-            winsound.Beep(1000, 700)
+        if self.stop_event.is_set():
+            return
+        self.alarm_stop_event.clear()
+        self.is_alarm_active = True
+        self.set_countdown("00:00:00")
+        self.update_control_state(True, False, False)
+        try:
+            while not self.stop_event.is_set() and not self.alarm_stop_event.is_set():
+                winsound.Beep(1000, 200)
+                if self.alarm_stop_event.wait(0.15):
+                    break
+        finally:
+            self.is_alarm_active = False
+
+    def stop_alarm(self) -> None:
+        self.alarm_stop_event.set()
 
     def _run_countdown(
         self,
@@ -89,11 +105,11 @@ class TimerService:
         completed = self._run_countdown(total_seconds, "Running")
         if completed:
             self.set_countdown("00:00:00")
-            self._beep()
             if self._save_session(subject, total_seconds):
                 self.set_status("Completed & saved")
             else:
                 self.set_status("Completed (save failed)")
+            self._beep()
 
         self.is_running = False
         self.update_control_state(False, False, False)
@@ -115,11 +131,13 @@ class TimerService:
                 break
 
             self.set_countdown("00:00:00")
-            self._beep()
             if self._save_session(subject, focus_seconds):
                 self.set_status(f"Session {session} completed & saved")
             else:
                 self.set_status(f"Session {session} completed (save failed)")
+            self._beep()
+            if self.stop_event.is_set():
+                break
 
             if session < config.POMODORO_TOTAL_SESSIONS:
                 self.current_phase = "short_break"
@@ -135,6 +153,8 @@ class TimerService:
                     self._beep()
                 else:
                     self.set_status(f"Break session {session} skipped")
+                if self.stop_event.is_set():
+                    break
             else:
                 self.current_phase = "long_break"
                 long_break_status = f"Long break - {config.POMODORO_LONG_BREAK_MINUTES} min"
@@ -156,7 +176,7 @@ class TimerService:
         self.update_control_state(False, False, False)
 
     def start_timer(self, total_seconds: int, subject: str) -> None:
-        if self.is_running:
+        if self.is_running or (self.timer_thread is not None and self.timer_thread.is_alive()):
             return
 
         self.timer_thread = threading.Thread(
@@ -167,7 +187,7 @@ class TimerService:
         self.timer_thread.start()
 
     def start_pomodoro(self, subject: str) -> None:
-        if self.is_running:
+        if self.is_running or (self.timer_thread is not None and self.timer_thread.is_alive()):
             return
 
         self.timer_thread = threading.Thread(
@@ -178,14 +198,14 @@ class TimerService:
         self.timer_thread.start()
 
     def pause_timer(self) -> None:
-        if not self.is_running or self.pause_event.is_set():
+        if not self.is_running or self.is_alarm_active or self.pause_event.is_set():
             return
         self.pause_event.set()
         self.set_status("Paused")
         self.update_control_state(started=True, paused=True, can_skip_break=False)
 
     def resume_timer(self) -> None:
-        if not self.is_running or not self.pause_event.is_set():
+        if not self.is_running or self.is_alarm_active or not self.pause_event.is_set():
             return
         self.pause_event.clear()
         self.set_status("Running")
@@ -195,7 +215,7 @@ class TimerService:
         self.update_control_state(started=True, paused=False, can_skip_break=can_skip_break)
 
     def skip_break(self) -> None:
-        if not self.is_running:
+        if not self.is_running or self.is_alarm_active:
             return
         if self.current_phase == "short_break":
             self.skip_break_event.set()
@@ -204,6 +224,8 @@ class TimerService:
 
     def reset_timer(self) -> None:
         self.stop_event.set()
+        self.stop_alarm()
+        self.is_alarm_active = False
         self.pause_event.clear()
         self.skip_break_event.clear()
         self.is_running = False

@@ -12,7 +12,7 @@ Main Components
 - `gui.py`: 2-column dashboard interface with subject selection, mode selection,
   timer controls on the left column, and inline history panel on the right.
 - `timer_service.py`: manual and Pomodoro countdown, including pause, resume,
-  reset, and skip break functionality.
+  reset, skip break, and a repeating alarm that waits for acknowledgement.
 - `session_repository.py`: storage and query of sessions from SQLite.
 - `history_panel.py`: inline history panel with summary by subject and recent sessions tabs.
 - `config.py`: timezone, local database location, subject options, and duration settings.
@@ -46,6 +46,13 @@ The primary timer button shows Start when idle, Pause while running, and Resume
 while paused. It returns to Start after reset or completion. Skip Break remains
 visible but disabled while a Pomodoro break is paused, and is enabled only when
 the current break can be skipped.
+
+When a countdown finishes, the alarm repeats until the primary button, now
+labelled Stop Alarm, is pressed. Completed focus sessions are saved before the
+alarm starts. Pomodoro waits for the alarm to be stopped before starting its
+next focus or break phase. Skip Break is disabled while the alarm is sounding.
+Reset cancels both the alarm and the current timer sequence. Closing the window
+also stops the alarm.
 
 History
 -------
