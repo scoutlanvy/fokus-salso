@@ -22,18 +22,26 @@ def format_datetime(iso_str: str) -> str:
 
 
 class HistoryPanel(ctk.CTkFrame):
-    def __init__(self, master, **kwargs):
+    def __init__(self, master, compact: bool = False, **kwargs):
         super().__init__(master, **kwargs)
+        self.compact = compact
+        
+        self.header_font = ("Helvetica", 14 if compact else 18, "bold")
+        self.row_font = ("Helvetica", 11 if compact else 13)
+        self.row_font_bold = ("Helvetica", 11 if compact else 13, "bold")
+        self.mono_font = ("Consolas", 10 if compact else 11)
+        self.row_padding = 2 if compact else 3
+        self.header_padding = (8, 4) if compact else (12, 8)
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
         header = ctk.CTkLabel(
             self,
-            text="📊 Riwayat Sesi",
-            font=("Helvetica", 18, "bold"),
+            text="Session History",
+            font=self.header_font,
         )
-        header.grid(row=0, column=0, sticky="w", padx=12, pady=(12, 8))
+        header.grid(row=0, column=0, sticky="w", padx=self.header_padding[0], pady=self.header_padding)
 
         content_frame = ctk.CTkFrame(self, fg_color="transparent")
         content_frame.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
@@ -43,8 +51,8 @@ class HistoryPanel(ctk.CTkFrame):
         self.tabview = ctk.CTkTabview(content_frame)
         self.tabview.grid(row=0, column=0, sticky="nsew")
 
-        self.tab_summary = self.tabview.add("Ringkasan")
-        self.tab_recent = self.tabview.add("Sesi Terakhir")
+        self.tab_summary = self.tabview.add("Summary")
+        self.tab_recent = self.tabview.add("Recent Sessions")
 
         self.summary_scroll = ctk.CTkScrollableFrame(self.tab_summary)
         self.summary_scroll.pack(fill="both", expand=True, padx=4, pady=4)
@@ -64,26 +72,26 @@ class HistoryPanel(ctk.CTkFrame):
         if not summary:
             ctk.CTkLabel(
                 self.summary_scroll,
-                text="Belum ada data sesi.",
-                font=("Helvetica", 13),
+                text="No sessions yet.",
+                font=self.row_font,
                 text_color="gray",
             ).pack(pady=20)
         else:
             for subject, total_seconds, count in summary:
                 row = ctk.CTkFrame(self.summary_scroll, corner_radius=8)
-                row.pack(fill="x", padx=4, pady=3)
+                row.pack(fill="x", padx=4, pady=self.row_padding)
 
                 ctk.CTkLabel(
                     row,
                     text=subject,
-                    font=("Helvetica", 13, "bold"),
+                    font=self.row_font_bold,
                     anchor="w",
                 ).pack(side="left", padx=10, pady=6)
 
                 ctk.CTkLabel(
                     row,
-                    text=f"{format_duration(total_seconds)} ({count} sesi)",
-                    font=("Helvetica", 12),
+                    text=f"{format_duration(total_seconds)} ({count} sessions)",
+                    font=self.row_font,
                     anchor="e",
                 ).pack(side="right", padx=10, pady=6)
 
@@ -91,19 +99,19 @@ class HistoryPanel(ctk.CTkFrame):
         if not recent:
             ctk.CTkLabel(
                 self.recent_scroll,
-                text="Belum ada data sesi.",
-                font=("Helvetica", 13),
+                text="No sessions yet.",
+                font=self.row_font,
                 text_color="gray",
             ).pack(pady=20)
         else:
             for subject, duration_seconds, recorded_at in recent:
                 row = ctk.CTkFrame(self.recent_scroll, corner_radius=6)
-                row.pack(fill="x", padx=4, pady=2)
+                row.pack(fill="x", padx=4, pady=self.row_padding)
 
                 ctk.CTkLabel(
                     row,
                     text=format_datetime(recorded_at),
-                    font=("Consolas", 11),
+                    font=self.mono_font,
                     text_color="gray",
                     width=90,
                     anchor="w",
@@ -112,13 +120,13 @@ class HistoryPanel(ctk.CTkFrame):
                 ctk.CTkLabel(
                     row,
                     text=subject,
-                    font=("Helvetica", 12),
+                    font=self.row_font,
                     anchor="w",
                 ).pack(side="left", padx=4, pady=5, expand=True, fill="x")
 
                 ctk.CTkLabel(
                     row,
                     text=format_duration(duration_seconds),
-                    font=("Helvetica", 12, "bold"),
+                    font=self.row_font_bold,
                     anchor="e",
                 ).pack(side="right", padx=10, pady=5)

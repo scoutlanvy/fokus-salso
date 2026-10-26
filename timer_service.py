@@ -35,7 +35,7 @@ class TimerService:
         try:
             save_session(subject, total_seconds)
         except (OSError, sqlite3.Error) as error:
-            message = f"Gagal menyimpan sesi ke database lokal: {error}"
+            message = f"Failed to save session to local database: {error}"
             self.set_status(message)
             if self.on_storage_error is not None:
                 self.on_storage_error(message)
@@ -86,14 +86,14 @@ class TimerService:
         self.is_running = True
         self.current_phase = "manual"
 
-        completed = self._run_countdown(total_seconds, "Countdown berjalan")
+        completed = self._run_countdown(total_seconds, "Running")
         if completed:
             self.set_countdown("00:00:00")
             self._beep()
             if self._save_session(subject, total_seconds):
-                self.set_status("Selesai dan tersimpan")
+                self.set_status("Completed & saved")
             else:
-                self.set_status("Selesai (gagal menyimpan)")
+                self.set_status("Completed (save failed)")
 
         self.is_running = False
         self.update_control_state(False, False, False)
@@ -110,20 +110,20 @@ class TimerService:
 
         for session in range(1, config.POMODORO_TOTAL_SESSIONS + 1):
             self.current_phase = "focus"
-            focus_status = f"Pomodoro sesi {session}/{config.POMODORO_TOTAL_SESSIONS} - Focus"
+            focus_status = f"Pomodoro session {session}/{config.POMODORO_TOTAL_SESSIONS} - Focus"
             if not self._run_countdown(focus_seconds, focus_status):
                 break
 
             self.set_countdown("00:00:00")
             self._beep()
             if self._save_session(subject, focus_seconds):
-                self.set_status(f"Sesi {session} selesai dan tersimpan")
+                self.set_status(f"Session {session} completed & saved")
             else:
-                self.set_status(f"Sesi {session} selesai (gagal menyimpan)")
+                self.set_status(f"Session {session} completed (save failed)")
 
             if session < config.POMODORO_TOTAL_SESSIONS:
                 self.current_phase = "short_break"
-                break_status = f"Break sesi {session} - {config.POMODORO_SHORT_BREAK_MINUTES} menit"
+                break_status = f"Break session {session} - {config.POMODORO_SHORT_BREAK_MINUTES} min"
                 break_completed = self._run_countdown(
                     short_break_seconds,
                     break_status,
@@ -134,10 +134,10 @@ class TimerService:
                 if break_completed:
                     self._beep()
                 else:
-                    self.set_status(f"Break sesi {session} dilewati")
+                    self.set_status(f"Break session {session} skipped")
             else:
                 self.current_phase = "long_break"
-                long_break_status = f"Long break - {config.POMODORO_LONG_BREAK_MINUTES} menit"
+                long_break_status = f"Long break - {config.POMODORO_LONG_BREAK_MINUTES} min"
                 long_break_completed = self._run_countdown(
                     long_break_seconds,
                     long_break_status,
@@ -152,7 +152,7 @@ class TimerService:
             self.set_status("Ready")
         else:
             self.set_countdown("00:00:00")
-            self.set_status("Pomodoro selesai")
+            self.set_status("Pomodoro completed")
         self.update_control_state(False, False, False)
 
     def start_timer(self, total_seconds: int, subject: str) -> None:
@@ -188,7 +188,7 @@ class TimerService:
         if not self.is_running or not self.pause_event.is_set():
             return
         self.pause_event.clear()
-        self.set_status("Countdown berjalan")
+        self.set_status("Running")
         can_skip_break = self.current_phase == "short_break" or (
             self.current_phase == "long_break" and config.POMODORO_ALLOW_SKIP_LONG_BREAK
         )

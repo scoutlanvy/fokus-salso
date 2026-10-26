@@ -1,37 +1,53 @@
 Study Timer
 ===========
 
-Aplikasi desktop CustomTkinter untuk mencatat sesi belajar melalui timer
-manual atau Pomodoro. Sesi fokus yang selesai disimpan secara lokal ke SQLite,
-tanpa koneksi ke layanan eksternal.
+Desktop application using CustomTkinter to track study sessions through manual
+or Pomodoro timers. Completed focus sessions are saved locally to SQLite,
+without connection to external services.
 
-Komponen utama
---------------
+Main Components
+---------------
 
-- `main.py`: entry point aplikasi.
-- `gui.py`: antarmuka, pemilihan subjek dan mode, kontrol timer, dan tombol riwayat.
-- `timer_service.py`: countdown manual dan Pomodoro, termasuk jeda, reset,
-  serta lewati break.
-- `session_repository.py`: penyimpanan dan query sesi dari SQLite.
-- `history_panel.py`: panel riwayat dengan tab ringkasan per subjek dan daftar sesi terakhir.
-- `config.py`: timezone, lokasi database lokal, pilihan subjek, dan durasi.
+- `main.py`: application entry point.
+- `gui.py`: 2-column dashboard interface with subject selection, mode selection,
+  timer controls on the left column, and inline history panel on the right.
+- `timer_service.py`: manual and Pomodoro countdown, including pause, resume,
+  reset, and skip break functionality.
+- `session_repository.py`: storage and query of sessions from SQLite.
+- `history_panel.py`: inline history panel with summary by subject and recent sessions tabs.
+- `config.py`: timezone, local database location, subject options, and duration settings.
 
-Penyimpanan
------------
-
-Database dibuat otomatis di `%LOCALAPPDATA%\StudyTimer\study_sessions.sqlite3`
-pada Windows. Catatan berisi subjek, durasi dalam detik, dan waktu sesi dalam
-timezone `Asia/Jakarta`. Sesi manual disimpan saat countdown selesai; setiap
-sesi fokus Pomodoro disimpan saat sesi fokus selesai. Catatan dari layanan
-eksternal sebelumnya tidak dimigrasikan. Bila database lokal tidak dapat ditulis, aplikasi
-menampilkan pemberitahuan dan tidak menghentikan timer.
-
-Riwayat
+Storage
 -------
 
-Tombol "Lihat Riwayat" di antarmuka utama membuka dialog dengan dua tab:
+Database is created automatically at `%LOCALAPPDATA%\StudyTimer\study_sessions.sqlite3`
+on Windows. Records contain subject, duration in seconds, and session time in
+`Asia/Jakarta` timezone. Manual sessions are saved when countdown completes; each
+Pomodoro focus session is saved when the focus phase completes. Records from previous
+external services are not migrated. When the local database cannot be written, the
+application shows an error notification but does not stop the timer.
 
-- **Ringkasan**: total durasi dan jumlah sesi per subjek, diurutkan dari yang terbanyak.
-- **Sesi Terakhir**: daftar 30 sesi terbaru dengan waktu, subjek, dan durasi.
+Interface
+---------
 
-Data diambil langsung dari SQLite; panel menampilkan pesan kosong jika belum ada sesi tersimpan.
+The application uses a 2-column dashboard layout:
+
+- **Left column**: subject selection, mode (Manual/Pomodoro), duration picker,
+  countdown display, control buttons (Start/Pause/Resume/Reset/Skip Break),
+  and status indicator.
+- **Right column**: inline history panel showing summary by subject and list of
+  recent sessions. The panel automatically refreshes after a session is successfully saved.
+
+UI uses English language. Theme supports dark and light modes.
+Window is resizable (default 900x620).
+
+History
+-------
+
+The inline history panel on the right column has two tabs:
+
+- **Summary**: total duration and session count per subject, sorted by most sessions.
+- **Recent Sessions**: list of 30 most recent sessions with time, subject, and duration.
+
+Data is fetched directly from SQLite; the panel shows an empty message if no sessions are saved yet.
+The panel auto-refreshes after each completed session is saved.

@@ -14,7 +14,7 @@ def run_app() -> None:
     app = ctk.CTk()
     app.title(config.APP_TITLE)
     app.geometry(config.WINDOW_SIZE)
-    app.resizable(False, False)
+    app.resizable(config.WINDOW_RESIZABLE, config.WINDOW_RESIZABLE)
 
     selected_subject = ctk.StringVar(value=config.SUBJECT_OPTIONS[0])
     selected_mode = ctk.StringVar(value="Manual")
@@ -24,12 +24,15 @@ def run_app() -> None:
     )
 
     duration_picker = None
+    history_panel = None
 
     def set_countdown(value: str) -> None:
         countdown_var.set(value)
 
     def set_status(value: str) -> None:
         status_var.set(value)
+        if history_panel is not None and ("saved" in value.lower() or "completed" in value.lower()):
+            app.after(100, history_panel.refresh)
 
     def update_control_state(
         started: bool,
@@ -49,7 +52,7 @@ def run_app() -> None:
     def show_storage_error(message: str) -> None:
         app.after(
             0,
-            lambda: messagebox.showerror("Penyimpanan gagal", message, parent=app),
+            lambda: messagebox.showerror("Save failed", message, parent=app),
         )
 
     timer_service = TimerService(
@@ -88,7 +91,7 @@ def run_app() -> None:
 
         total_seconds = duration_picker.get_total_seconds()
         if total_seconds <= 0:
-            status_var.set("Durasi harus lebih dari 0 detik")
+            status_var.set("Duration must be greater than 0")
             return
 
         countdown_var.set(timer_service.format_hms(total_seconds))
@@ -122,17 +125,26 @@ def run_app() -> None:
     def skip_break() -> None:
         timer_service.skip_break()
 
-    main_frame = ctk.CTkFrame(app, corner_radius=15)
-    main_frame.pack(fill="both", expand=True, padx=16, pady=16)
+    main_frame = ctk.CTkFrame(app, corner_radius=0, fg_color="transparent")
+    main_frame.pack(fill="both", expand=True, padx=0, pady=0)
+    main_frame.grid_columnconfigure(0, weight=3)
+    main_frame.grid_columnconfigure(1, weight=2)
+    main_frame.grid_rowconfigure(0, weight=1)
+
+    left_frame = ctk.CTkFrame(main_frame, corner_radius=0, fg_color="transparent")
+    left_frame.grid(row=0, column=0, sticky="nsew", padx=(16, 8), pady=16)
+
+    right_frame = ctk.CTkFrame(main_frame, corner_radius=12)
+    right_frame.grid(row=0, column=1, sticky="nsew", padx=(8, 16), pady=16)
 
     header_label = ctk.CTkLabel(
-        main_frame,
+        left_frame,
         text="⏱️ Study Timer",
         font=("Helvetica", 22, "bold"),
     )
     header_label.pack(pady=(8, 12))
 
-    subject_frame = ctk.CTkFrame(main_frame, corner_radius=12)
+    subject_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     subject_frame.pack(fill="x", padx=10, pady=(0, 15))
 
     ctk.CTkLabel(subject_frame, text="Subject", anchor="w").grid(
@@ -146,7 +158,7 @@ def run_app() -> None:
     )
     subject_menu.grid(row=0, column=1, padx=10, pady=8)
 
-    mode_frame = ctk.CTkFrame(main_frame, corner_radius=12)
+    mode_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     mode_frame.pack(fill="x", padx=10, pady=(0, 15))
 
     ctk.CTkLabel(mode_frame, text="Mode", anchor="w").grid(
@@ -161,7 +173,7 @@ def run_app() -> None:
     )
     mode_menu.grid(row=0, column=1, padx=10, pady=8)
 
-    input_frame = ctk.CTkFrame(main_frame, corner_radius=12)
+    input_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     input_frame.pack(fill="x", padx=10, pady=(0, 10))
 
     ctk.CTkLabel(input_frame, text="Duration", font=("Helvetica", 13, "bold")).pack(
@@ -173,15 +185,15 @@ def run_app() -> None:
     pomodoro_info = ctk.CTkLabel(
         input_frame,
         text=(
-            f"Pomodoro: {config.POMODORO_TOTAL_SESSIONS} sesi focus "
-            f"{config.POMODORO_FOCUS_MINUTES} menit, break "
-            f"{config.POMODORO_SHORT_BREAK_MINUTES}/{config.POMODORO_LONG_BREAK_MINUTES} menit"
+            f"Pomodoro: {config.POMODORO_TOTAL_SESSIONS} sessions focus "
+            f"{config.POMODORO_FOCUS_MINUTES} min, break "
+            f"{config.POMODORO_SHORT_BREAK_MINUTES}/{config.POMODORO_LONG_BREAK_MINUTES} min"
         ),
         font=("Helvetica", 12),
     )
     pomodoro_info.pack(pady=(0, 10))
 
-    countdown_frame = ctk.CTkFrame(main_frame, corner_radius=12)
+    countdown_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     countdown_frame.pack(fill="x", padx=10, pady=(0, 10))
 
     countdown_label = ctk.CTkLabel(
@@ -191,7 +203,7 @@ def run_app() -> None:
     )
     countdown_label.pack(pady=16)
 
-    button_frame = ctk.CTkFrame(main_frame, corner_radius=12)
+    button_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     button_frame.pack(fill="x", padx=10, pady=(0, 8))
 
     start_button = ctk.CTkButton(button_frame, text="Start", command=start_timer)
@@ -213,30 +225,11 @@ def run_app() -> None:
 
     button_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-    status_label = ctk.CTkLabel(main_frame, textvariable=status_var, font=("Helvetica", 14))
+    status_label = ctk.CTkLabel(left_frame, textvariable=status_var, font=("Helvetica", 14))
     status_label.pack(pady=(0, 6))
 
-    def open_history() -> None:
-        dialog = ctk.CTkToplevel(app)
-        dialog.title("Riwayat Sesi")
-        dialog.geometry("480x520")
-        dialog.resizable(True, True)
-        dialog.transient(app)
-        dialog.grab_set()
-
-        panel = HistoryPanel(dialog)
-        panel.pack(fill="both", expand=True, padx=8, pady=8)
-
-        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
-
-    history_button = ctk.CTkButton(
-        main_frame,
-        text="📊 Lihat Riwayat",
-        command=open_history,
-        height=32,
-        font=("Helvetica", 12),
-    )
-    history_button.pack(pady=(0, 8))
+    history_panel = HistoryPanel(right_frame, compact=True)
+    history_panel.pack(fill="both", expand=True, padx=8, pady=8)
 
     update_control_state(started=False)
     app.mainloop()
