@@ -1,6 +1,7 @@
 import queue
 import threading
 import wave
+import time
 
 import pytest
 
@@ -10,8 +11,10 @@ from timer_service import TimerService
 
 
 @pytest.fixture(autouse=True)
-def silent_alarm(monkeypatch):
+def silent_alarm(monkeypatch, tmp_path):
     monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
+    monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
 
 
 def make_service():
@@ -83,8 +86,6 @@ def test_pomodoro_waits_for_each_alarm_before_next_phase(monkeypatch):
     service = make_service()
     alarms = queue.Queue()
     phases = []
-    saved = []
-    monkeypatch.setattr(config, "POMODORO_TOTAL_SESSIONS", 2)
     service.update_control_state = lambda *args, **kwargs: (
         alarms.put(service.current_phase) if service.is_alarm_active else None
     )
@@ -94,15 +95,21 @@ def test_pomodoro_waits_for_each_alarm_before_next_phase(monkeypatch):
         return True
 
     monkeypatch.setattr(service, "_run_countdown", countdown)
-    monkeypatch.setattr(service, "_save_session", lambda *args: saved.append(args) or True)
     service.start_pomodoro("Anki")
     try:
-        expected = ["focus", "short_break", "focus", "long_break"]
-        for index, phase in enumerate(expected):
-            assert alarms.get(timeout=2) == phase
-            assert phases == expected[:index + 1]
-            assert len(saved) == (index // 2) + 1
+        for index in range(5):
+            assert alarms.get(timeout=2) == "focus"
+            assert phases == ["focus"] * (index + 1)
+            assert service.break_balance_seconds == [300, 600, 900, 1800, 2100][index]
             service.stop_alarm()
+            deadline = time.monotonic() + 2
+            while service.current_phase != "choice" and time.monotonic() < deadline:
+                threading.Event().wait(0.01)
+            assert service.current_phase == "choice"
+            assert phases == ["focus"] * (index + 1)
+            if index < 4:
+                assert service.continue_focus()
+        service.reset_timer()
         service.timer_thread.join(timeout=2)
         assert not service.timer_thread.is_alive()
         assert not service.is_running

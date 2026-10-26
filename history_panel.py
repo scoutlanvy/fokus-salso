@@ -1,4 +1,5 @@
 import customtkinter as ctk
+import sqlite3
 from datetime import datetime
 from typing import List, Tuple
 
@@ -68,7 +69,14 @@ class HistoryPanel(ctk.CTkFrame):
         for widget in self.recent_scroll.winfo_children():
             widget.destroy()
 
-        summary = get_summary_by_subject()
+        try:
+            summary = get_summary_by_subject()
+            recent = get_recent_sessions(limit=30)
+        except (OSError, sqlite3.Error):
+            for panel in (self.summary_scroll, self.recent_scroll):
+                ctk.CTkLabel(panel, text="History unavailable. Check local storage.",
+                             font=self.row_font, wraplength=200).pack(pady=20)
+            return
         if not summary:
             ctk.CTkLabel(
                 self.summary_scroll,
@@ -95,7 +103,6 @@ class HistoryPanel(ctk.CTkFrame):
                     anchor="e",
                 ).pack(side="right", padx=10, pady=6)
 
-        recent = get_recent_sessions(limit=30)
         if not recent:
             ctk.CTkLabel(
                 self.recent_scroll,
