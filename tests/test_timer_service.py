@@ -1,5 +1,6 @@
 import queue
 import threading
+import wave
 
 import pytest
 
@@ -10,7 +11,7 @@ from timer_service import TimerService
 
 @pytest.fixture(autouse=True)
 def silent_alarm(monkeypatch):
-    monkeypatch.setattr(timer_service.winsound, "Beep", lambda *_: None)
+    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
 
 
 def make_service():
@@ -19,19 +20,23 @@ def make_service():
 
 def test_alarm_keeps_ringing_until_stopped(monkeypatch):
     service = make_service()
-    beeps = queue.Queue()
-    monkeypatch.setattr(timer_service.winsound, "Beep", lambda *_: beeps.put(True))
+    playback = queue.Queue()
+    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: playback.put(args))
     worker = threading.Thread(target=service._beep, daemon=True)
     worker.start()
     try:
-        for _ in range(5):
-            beeps.get(timeout=2)
+        sound, flags = playback.get(timeout=2)
+        assert sound == str(timer_service.ALARM_SOUND_PATH)
+        assert flags & timer_service.winsound.SND_LOOP
+        assert flags & timer_service.winsound.SND_ASYNC
+        assert flags & timer_service.winsound.SND_FILENAME
         assert worker.is_alive()
         assert service.is_alarm_active
         service.stop_alarm()
         worker.join(timeout=2)
         assert not worker.is_alive()
         assert not service.is_alarm_active
+        assert playback.get(timeout=2) == (None, 0)
     finally:
         service.stop_alarm()
         worker.join(timeout=2)
@@ -142,9 +147,39 @@ def test_alarm_cannot_be_paused_or_skipped():
 
 def test_cancelled_timer_does_not_start_alarm(monkeypatch):
     service = make_service()
-    beeps = []
-    monkeypatch.setattr(timer_service.winsound, "Beep", lambda *args: beeps.append(args))
+    sounds = []
+    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: sounds.append(args))
     service.reset_timer()
+    sounds.clear()
     service._beep()
-    assert not beeps
+    assert not sounds
     assert not service.is_alarm_active
+
+
+def test_stop_alarm_stops_audio_before_returning(monkeypatch):
+    service = make_service()
+    calls = []
+    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: calls.append(args))
+    service.is_alarm_active = True
+    service.stop_alarm()
+    # No worker needs to wake or finish a beep for Windows to receive the stop.
+    assert calls == [(None, 0)]
+    assert service.alarm_stop_event.is_set()
+
+
+def test_stop_before_playback_starts_does_not_restart_sound(monkeypatch):
+    service = make_service()
+    calls = []
+    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: calls.append(args))
+    service.update_control_state = lambda *args: service.stop_alarm()
+    service._beep()
+    assert calls
+    assert all(sound is None for sound, _flags in calls)
+    assert not service.is_alarm_active
+
+
+def test_bundled_alarm_is_a_valid_short_wav():
+    with wave.open(str(timer_service.ALARM_SOUND_PATH), "rb") as sound:
+        assert sound.getnchannels() == 1
+        assert sound.getsampwidth() == 2
+        assert 0.34 < sound.getnframes() / sound.getframerate() < 0.36

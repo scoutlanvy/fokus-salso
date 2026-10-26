@@ -2,6 +2,7 @@ import sqlite3
 import threading
 import time
 import winsound
+from pathlib import Path
 from typing import Callable, Optional
 
 import config
@@ -9,6 +10,7 @@ from session_repository import save_session
 
 Callback = Callable[[str], None]
 ControlStateCallback = Callable[[bool, bool, bool], None]
+ALARM_SOUND_PATH = Path(__file__).with_name("alarm.wav")
 
 
 class TimerService:
@@ -28,6 +30,7 @@ class TimerService:
         self.pause_event = threading.Event()
         self.skip_break_event = threading.Event()
         self.alarm_stop_event = threading.Event()
+        self._alarm_lock = threading.Lock()
         self.is_alarm_active = False
         self.remaining_seconds = 0
         self.is_running = False
@@ -51,22 +54,31 @@ class TimerService:
         return f"{hours:02}:{minutes:02}:{seconds:02}"
 
     def _beep(self) -> None:
-        if self.stop_event.is_set():
-            return
-        self.alarm_stop_event.clear()
-        self.is_alarm_active = True
+        with self._alarm_lock:
+            if self.stop_event.is_set():
+                return
+            self.alarm_stop_event.clear()
+            self.is_alarm_active = True
         self.set_countdown("00:00:00")
         self.update_control_state(True, False, False)
         try:
-            while not self.stop_event.is_set() and not self.alarm_stop_event.is_set():
-                winsound.Beep(1000, 200)
-                if self.alarm_stop_event.wait(0.15):
-                    break
+            with self._alarm_lock:
+                if not self.stop_event.is_set() and not self.alarm_stop_event.is_set():
+                    winsound.PlaySound(
+                        str(ALARM_SOUND_PATH),
+                        winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_LOOP,
+                    )
+            while not self.stop_event.is_set() and not self.alarm_stop_event.wait(0.05):
+                pass
         finally:
-            self.is_alarm_active = False
+            with self._alarm_lock:
+                winsound.PlaySound(None, 0)
+                self.is_alarm_active = False
 
     def stop_alarm(self) -> None:
-        self.alarm_stop_event.set()
+        with self._alarm_lock:
+            self.alarm_stop_event.set()
+            winsound.PlaySound(None, 0)
 
     def _run_countdown(
         self,

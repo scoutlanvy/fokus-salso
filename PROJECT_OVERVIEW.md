@@ -63,6 +63,9 @@ alarm starts. Pomodoro waits for the alarm to be stopped before starting its
 next focus or break phase. Skip Break is disabled while the alarm is sounding.
 Reset cancels both the alarm and the current timer sequence. Closing the window
 also stops the alarm.
+The bundled `alarm.wav` preserves the 1000 Hz beep pattern. Windows plays it
+asynchronously in a loop; Stop Alarm, Reset, and closing the window directly
+cancel playback without waiting for the current beep to finish.
 
 History
 -------
