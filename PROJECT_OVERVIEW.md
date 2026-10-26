@@ -1,133 +1,92 @@
-Study Timer
-===========
+﻿# Study Timer — Technical Overview
 
-Quick Launch (Windows)
-----------------------
+Read the sections relevant to the change. Installation, launch instructions,
+preview usage, and database paths are documented in [README.md](README.md).
 
-Double-click `Study Timer.vbs` to open the application without a terminal.
-The launcher uses `.venv\Scripts\pythonw.exe` from the project folder.
-For desktop access, create a shortcut to `Study Timer.vbs` using Windows
-Send to > Desktop (create shortcut). Keep the launcher inside the project folder.
-
-For a quick trial, double-click `Coba Pomodoro.vbs`. This opens TEST MODE directly
-in Pomodoro, with 10-second focus and break rewards of 5, 5, 5, then 15 seconds.
-It sets `STUDY_TIMER_PREVIEW=1` only for its child process and stores test history,
-balance, and cycle position in `%LOCALAPPDATA%\StudyTimerPreview`. Close that
-window and launch Study Timer normally to return to 25-minute focus and the
-original database. No normal sessions or balances are modified by the trial.
-
-Desktop application using CustomTkinter to track study sessions through manual
-or Pomodoro timers. Completed focus sessions are saved locally to SQLite,
-without connection to external services.
-
-Main Components
----------------
+## Main Components
 
 - `main.py`: application entry point.
-- `gui.py`: 2-column dashboard interface with subject selection, mode selection,
-  timer controls on the left column, and inline history panel on the right.
-- `timer_service.py`: manual and Pomodoro countdown, including pause, resume,
-  reset, skip break, and a repeating alarm that waits for acknowledgement.
-- `session_repository.py`: storage and query of sessions from SQLite.
-- `history_panel.py`: inline history panel with summary by subject and recent sessions tabs.
-- `config.py`: timezone, local database location, subject options, and duration settings.
+- `gui.py`: dashboard, timer controls, and Pomodoro decisions.
+- `duration_picker.py`: editable Hours/Minutes/Seconds columns.
+- `timer_service.py`: countdown, phase transitions, pause/resume, and alarm.
+- `session_repository.py`: SQLite persistence and queries.
+- `history_panel.py`: subject summaries and recent sessions.
+- `config.py`: timezone, storage paths, subjects, durations, and theme values.
 
-Storage
--------
+## Storage and Failure Handling
 
-Database is created automatically at `%LOCALAPPDATA%\StudyTimer\study_sessions.sqlite3`
-on Windows. Records contain subject, duration in seconds, and session time in
-`Asia/Jakarta` timezone. Manual sessions are saved when countdown completes; each
-Pomodoro focus session is saved when the focus phase completes. Records from previous
-external services are not migrated. Manual save errors show a notification without
-stopping the timer. Pomodoro write failures pause progress; Resume retries the
-pending transaction and Reset cancels it. History read failures show an unavailable
-message without closing the application.
+Session records contain subject, duration in seconds, and time in `Asia/Jakarta`.
+Manual sessions save when countdown completes; Pomodoro sessions save when focus
+completes, before the alarm. Records from previous external services are not migrated.
 
-The `pomodoro_state` table stores a single break balance in seconds and the
-completed-focus position in the four-focus cycle. Existing databases get this
-table automatically with zero balance and position, without altering session
-history. Saving a completed Pomodoro focus, awarding its break credit, and
-advancing the cycle are one SQLite transaction. Each elapsed break second is
-committed before advancing the displayed timer. A forced shutdown can leave at
-most one uncommitted second; active timers are not restored.
+Manual save errors show a notification without stopping the timer. Pomodoro write
+failures pause progress: Resume retries the pending transaction; Reset cancels it.
+History read failures show an unavailable message without closing the application.
 
-Interface
----------
+The `pomodoro_state` table holds break balance in seconds and position in the
+four-focus reward cycle. Existing databases gain this table with zero balance and
+position without changing session history. Saving focus, awarding credit, and
+advancing the cycle form one SQLite transaction.
 
-The application uses a 2-column dashboard layout:
+Each running break second is committed before the displayed timer advances. A
+forced shutdown can leave at most one uncommitted second. Active timers are not restored.
 
-- **Left column**: subject selection, mode (Manual/Pomodoro), duration picker,
-  countdown display, a primary button that changes between Start/Pause/Resume,
-  a separate Reset button, Skip Break during Pomodoro breaks, break balance and
-  spending controls in Pomodoro mode, and a status indicator. The left column
-  scrolls in smaller windows; duration inputs are hidden in Pomodoro mode.
-- **Right column**: inline history panel showing summary by subject and list of
-  recent sessions. The panel automatically refreshes after a session is successfully saved.
+## Interface and Duration Input
 
-UI uses English language. Theme supports dark and light modes.
-The default subject is `Umum` in both Manual and Pomodoro modes, so a session
-can start without choosing a specific category. Other subjects remain selectable.
-Sessions under `Umum` are saved and displayed in history like any other subject;
-existing history is unchanged.
-Window is resizable (default 900x620).
+The resizable window defaults to 900x620. The left column contains timer controls
+and scrolls in small windows; the right contains history. Subject defaults to `Umum`
+in both modes and is recorded like any other subject.
 
-Manual duration starts at `00:00:00` and returns to that value on Reset.
-In Manual mode, duration can be set by scrolling or typing the center value in
-each Hours/Minutes/Seconds column. Scrolling down increases the value; scrolling
-up decreases it, wrapping at the limits. Dragging remains available outside the
-text inputs without moving keyboard focus on hover. Hours accept 0-99, minutes
-and seconds accept 0-59, with up to two digits per input. Enter, leaving the input,
-or pressing Start commits the value and formats it with two digits. Empty or
-out-of-range input reverts to the previous committed value. Duration editing is
-disabled while running or paused and in Pomodoro mode; Pomodoro durations remain
-configured in `config.py`.
+Manual duration starts at `00:00:00` and Reset restores it. Hours accept 0–99;
+minutes and seconds accept 0–59, with up to two digits per input. Scrolling down
+increases values, scrolling up decreases them, and values wrap at their limits.
+Dragging works outside text inputs without changing keyboard focus on hover.
 
-The primary timer button shows Start when idle, Pause while running, and Resume
-while paused. At a Pomodoro decision it shows Continue Focus. It returns to Start
-after reset or an idle break completes. Skip Break remains visible but disabled
-while a break is paused or its alarm is sounding. Every banked break can be skipped.
+Enter, leaving an input, or Start commits and formats its value to two digits.
+Empty or out-of-range input restores the previous committed value. Editing is
+disabled while running or paused; duration inputs are hidden in Pomodoro mode.
 
-When a countdown finishes, the alarm repeats until the primary button, now
-labelled Stop Alarm, is pressed. Completed focus sessions are saved before the
-alarm starts. Pomodoro waits for Stop Alarm, then waits for an explicit decision
-to continue focus or use break balance. No next phase starts automatically.
-Reset cancels both the alarm and the current timer sequence. Closing the window
-also stops the alarm.
-The bundled `alarm.wav` preserves the 1000 Hz beep pattern. Windows plays it
-asynchronously in a loop; Stop Alarm, Reset, and closing the window directly
-cancel playback without waiting for the current beep to finish.
+## Timer Transitions and Alarm
 
-Pomodoro Break Bank
--------------------
+The primary button shows Start, Pause, Resume, Continue Focus, or Stop Alarm
+according to state. Reset and completion of an idle break return it to Start.
+Skip Break is visible during breaks but disabled while paused or sounding an alarm.
 
-Focus lasts 25 minutes. Completed focuses award 5, 5, 5, then 15 minutes of break
-credit, repeating without a four-session limit. The cycle position and balance
-are shared across subjects and survive Reset and application restarts. Interrupted
-focuses award nothing; Manual sessions never change the balance.
+The alarm loops until acknowledged. Pomodoro then waits for an explicit focus or
+break decision; no next phase starts automatically. Reset cancels the alarm and
+current sequence; closing the window also stops playback.
 
-After Stop Alarm, Continue Focus starts another focus. The Break button uses
-the entire balance; Choose Duration accepts hours/minutes/seconds above zero
-and no greater than the balance (minutes and seconds must be 0-59). Cancel
-changes nothing. These break controls are also available when Pomodoro is idle.
-
-Only running break seconds are deducted, not paused time, alarm time, or decision
-time. Skip Break returns to the decision controls; Reset or closing the app
-cancels the active timer. All unused credit remains saved. A break taken between
-focuses returns to the decision controls after its alarm; a completed break
-started from idle returns to idle after its alarm is acknowledged. The previous
-`POMODORO_ALLOW_SKIP_LONG_BREAK` setting no longer controls banked breaks.
-
+Windows plays the bundled 1000 Hz `alarm.wav` asynchronously in a loop. Stop Alarm,
+Reset, and closing the window cancel playback without waiting for the beep to end.
 Worker threads send notifications through a queue consumed by the Tk event loop;
-widget changes and error dialogs run only on the UI thread.
+widget updates and error dialogs run on the UI thread.
 
-History
--------
+## Pomodoro Break Bank
 
-The inline history panel on the right column has two tabs:
+Durations are configured in `config.py`; normal focus is 25 minutes with rewards
+of 5, 5, 5, then 15 minutes, repeating indefinitely. Balance and cycle position are
+shared across subjects and survive Reset and restarts. Interrupted focuses award
+nothing; Manual sessions never change the balance.
 
-- **Summary**: total duration and session count per subject, sorted by most sessions.
-- **Recent Sessions**: list of 30 most recent sessions with time, subject, and duration.
+Break uses the entire balance. Choose Duration accepts a positive duration no
+greater than the balance, with minutes and seconds limited to 0–59. Cancel changes
+nothing. Break controls are also available when Pomodoro is idle.
 
-Data is fetched directly from SQLite; the panel shows an empty message if no sessions are saved yet.
-The panel auto-refreshes after each completed session is saved.
+Only running break seconds are deducted. Paused time, alarm time, and decision
+time cost nothing. Skip Break returns to decision controls; Reset or closing
+cancels the active timer and preserves unused credit. A break between focuses
+returns to decision controls after acknowledgement; a break started from idle
+returns to idle. `POMODORO_ALLOW_SKIP_LONG_BREAK` no longer controls banked breaks.
+
+## History
+
+Summary shows total duration and session count per subject, sorted by most sessions.
+Recent Sessions shows the latest 30 sessions with time, subject, and duration.
+The panel queries SQLite directly, shows an empty state when needed, and refreshes
+after a session saves successfully.
+
+## Preview Isolation
+
+`Coba Pomodoro.vbs` sets `STUDY_TIMER_PREVIEW=1` only for its child process.
+Configuration selects separate storage for history, balance, and cycle position,
+short durations, and the TEST MODE title. Normal session data remains untouched.
