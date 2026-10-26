@@ -1,7 +1,9 @@
 import customtkinter as ctk
+from tkinter import messagebox
 
 import config
 from duration_picker import DurationPicker
+from history_panel import HistoryPanel
 from timer_service import TimerService
 
 
@@ -44,7 +46,18 @@ def run_app() -> None:
         if duration_picker is not None:
             duration_picker.set_enabled(not started and selected_mode.get() == "Manual")
 
-    timer_service = TimerService(set_countdown, set_status, update_control_state)
+    def show_storage_error(message: str) -> None:
+        app.after(
+            0,
+            lambda: messagebox.showerror("Penyimpanan gagal", message, parent=app),
+        )
+
+    timer_service = TimerService(
+        set_countdown,
+        set_status,
+        update_control_state,
+        on_storage_error=show_storage_error,
+    )
 
     def set_mode(mode: str) -> None:
         selected_mode.set(mode)
@@ -114,7 +127,7 @@ def run_app() -> None:
 
     header_label = ctk.CTkLabel(
         main_frame,
-        text="⏱️ Notion Study Timer",
+        text="⏱️ Study Timer",
         font=("Helvetica", 22, "bold"),
     )
     header_label.pack(pady=(8, 12))
@@ -202,6 +215,28 @@ def run_app() -> None:
 
     status_label = ctk.CTkLabel(main_frame, textvariable=status_var, font=("Helvetica", 14))
     status_label.pack(pady=(0, 6))
+
+    def open_history() -> None:
+        dialog = ctk.CTkToplevel(app)
+        dialog.title("Riwayat Sesi")
+        dialog.geometry("480x520")
+        dialog.resizable(True, True)
+        dialog.transient(app)
+        dialog.grab_set()
+
+        panel = HistoryPanel(dialog)
+        panel.pack(fill="both", expand=True, padx=8, pady=8)
+
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+
+    history_button = ctk.CTkButton(
+        main_frame,
+        text="📊 Lihat Riwayat",
+        command=open_history,
+        height=32,
+        font=("Helvetica", 12),
+    )
+    history_button.pack(pady=(0, 8))
 
     update_control_state(started=False)
     app.mainloop()

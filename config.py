@@ -1,11 +1,9 @@
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    from backports.zoneinfo import ZoneInfo
+import os
+from pathlib import Path
 
-NOTION_TOKEN = "REDACTED_NOTION_TOKEN"
-DATABASE_ID = "REDACTED_DATABASE_ID"
 TIMEZONE = "Asia/Jakarta"
+DATA_DIRECTORY = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "StudyTimer"
+DATABASE_PATH = DATA_DIRECTORY / "study_sessions.sqlite3"
 
 SUBJECT_OPTIONS = [
     "Anki",

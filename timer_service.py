@@ -1,20 +1,28 @@
+import sqlite3
 import threading
 import time
 import winsound
 from typing import Callable, Optional
 
 import config
-from notion_service import save_session_to_notion
+from session_repository import save_session
 
 Callback = Callable[[str], None]
 ControlStateCallback = Callable[[bool, bool, bool], None]
 
 
 class TimerService:
-    def __init__(self, set_countdown: Callback, set_status: Callback, update_control_state: ControlStateCallback):
+    def __init__(
+        self,
+        set_countdown: Callback,
+        set_status: Callback,
+        update_control_state: ControlStateCallback,
+        on_storage_error: Optional[Callback] = None,
+    ):
         self.set_countdown = set_countdown
         self.set_status = set_status
         self.update_control_state = update_control_state
+        self.on_storage_error = on_storage_error
         self.timer_thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
@@ -22,6 +30,17 @@ class TimerService:
         self.remaining_seconds = 0
         self.is_running = False
         self.current_phase = "manual"
+
+    def _save_session(self, subject: str, total_seconds: int) -> bool:
+        try:
+            save_session(subject, total_seconds)
+        except (OSError, sqlite3.Error) as error:
+            message = f"Gagal menyimpan sesi ke database lokal: {error}"
+            self.set_status(message)
+            if self.on_storage_error is not None:
+                self.on_storage_error(message)
+            return False
+        return True
 
     def format_hms(self, total_seconds: int) -> str:
         hours = total_seconds // 3600
@@ -70,10 +89,11 @@ class TimerService:
         completed = self._run_countdown(total_seconds, "Countdown berjalan")
         if completed:
             self.set_countdown("00:00:00")
-            self.set_status("Selesai")
             self._beep()
-            save_session_to_notion(subject, total_seconds)
-            self.set_status("Selesai dan tersimpan")
+            if self._save_session(subject, total_seconds):
+                self.set_status("Selesai dan tersimpan")
+            else:
+                self.set_status("Selesai (gagal menyimpan)")
 
         self.is_running = False
         self.update_control_state(False, False, False)
@@ -95,9 +115,11 @@ class TimerService:
                 break
 
             self.set_countdown("00:00:00")
-            self.set_status(f"Sesi {session} selesai")
             self._beep()
-            save_session_to_notion(subject, focus_seconds)
+            if self._save_session(subject, focus_seconds):
+                self.set_status(f"Sesi {session} selesai dan tersimpan")
+            else:
+                self.set_status(f"Sesi {session} selesai (gagal menyimpan)")
 
             if session < config.POMODORO_TOTAL_SESSIONS:
                 self.current_phase = "short_break"
