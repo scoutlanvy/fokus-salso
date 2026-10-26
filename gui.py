@@ -18,7 +18,7 @@ def run_app() -> None:
     app.resizable(config.WINDOW_RESIZABLE, config.WINDOW_RESIZABLE)
 
     selected_subject = ctk.StringVar(value=config.SUBJECT_OPTIONS[0])
-    selected_mode = ctk.StringVar(value="Pomodoro" if config.PREVIEW_MODE else "Manual")
+    selected_mode = ctk.StringVar(value="Pomodoro")
     status_var = ctk.StringVar(value="Ready")
     countdown_var = ctk.StringVar(
         value=f"{config.DEFAULT_HOURS:02}:{config.DEFAULT_MINUTES:02}:{config.DEFAULT_SECONDS:02}"

@@ -88,6 +88,22 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
             subject = next(w for w in widgets() if isinstance(w, ctk.CTkOptionMenu) and "Umum" in w.cget("values"))
             assert subject.get() == "Umum"
             mode = next(w for w in widgets() if isinstance(w, ctk.CTkOptionMenu) and "Pomodoro" in w.cget("values"))
+            assert mode.get() == "Pomodoro"
+            assert not service.is_running
+            assert button("Start").cget("state") == "normal"
+            def displayed(value):
+                return any(isinstance(w, ctk.CTkLabel)
+                           and str(w.cget("textvariable"))
+                           and app.getvar(str(w.cget("textvariable"))) == value
+                           for w in widgets())
+
+            assert displayed("00:25:00")
+            mode.set("Manual")
+            mode.cget("command")("Manual")
+            app.update()
+            assert mode.get() == "Manual"
+            assert displayed("00:00:00")
+            assert not service.is_running
             mode.set("Pomodoro")
             mode.cget("command")("Pomodoro")
             app.update()

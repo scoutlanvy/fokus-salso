@@ -32,7 +32,7 @@ Atau jalankan dari PowerShell:
 .\.venv\Scripts\python.exe main.py
 ```
 
-Pilih subjek dan mode, lalu tekan **Start**. Pada mode Manual, atur durasi terlebih dahulu. Setelah alarm Pomodoro dihentikan dengan **Stop Alarm**, pilih **Continue Focus** atau gunakan saldo istirahat. Fase berikutnya menunggu pilihan pengguna.
+Aplikasi selalu dibuka dalam mode **Pomodoro**, dengan fokus 25 menit yang menunggu tombol **Start** ditekan. Pilih subjek jika diperlukan. Untuk mode Manual, pilih **Manual** dan atur durasi terlebih dahulu. Setelah alarm Pomodoro dihentikan dengan **Stop Alarm**, pilih **Continue Focus** atau gunakan saldo istirahat. Fase berikutnya menunggu pilihan pengguna.
 
 ## Mencoba Pomodoro dengan cepat
 

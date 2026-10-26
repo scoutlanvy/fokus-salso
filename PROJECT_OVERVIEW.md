@@ -33,6 +33,10 @@ forced shutdown can leave at most one uncommitted second. Active timers are not 
 
 ## Interface and Duration Input
 
+Every launch defaults to Pomodoro without remembering the previous mode. The
+existing mode initialization displays the configured focus duration and Pomodoro
+controls without starting the timer. Manual remains selectable from the mode menu.
+
 The resizable window defaults to 900x620. The left column contains timer controls
 and scrolls in small windows; the right contains history. Subject defaults to `Umum`
 in both modes and is recorded like any other subject.
