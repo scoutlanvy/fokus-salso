@@ -33,13 +33,19 @@ Interface
 The application uses a 2-column dashboard layout:
 
 - **Left column**: subject selection, mode (Manual/Pomodoro), duration picker,
-  countdown display, control buttons (Start/Pause/Resume/Reset/Skip Break),
+  countdown display, a primary button that changes between Start/Pause/Resume,
+  a separate Reset button, and Skip Break shown only during Pomodoro breaks,
   and status indicator.
 - **Right column**: inline history panel showing summary by subject and list of
   recent sessions. The panel automatically refreshes after a session is successfully saved.
 
 UI uses English language. Theme supports dark and light modes.
 Window is resizable (default 900x620).
+
+The primary timer button shows Start when idle, Pause while running, and Resume
+while paused. It returns to Start after reset or completion. Skip Break remains
+visible but disabled while a Pomodoro break is paused, and is enabled only when
+the current break can be skipped.
 
 History
 -------

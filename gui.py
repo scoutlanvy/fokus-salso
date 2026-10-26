@@ -39,11 +39,18 @@ def run_app() -> None:
         paused: bool = False,
         can_skip_break: bool = False,
     ) -> None:
-        start_button.configure(state=ctk.DISABLED if started else ctk.NORMAL)
-        pause_button.configure(state=ctk.NORMAL if started and not paused else ctk.DISABLED)
-        resume_button.configure(state=ctk.NORMAL if paused else ctk.DISABLED)
+        if not started:
+            primary_button.configure(text="Start", command=start_timer)
+        elif paused:
+            primary_button.configure(text="Resume", command=resume_timer)
+        else:
+            primary_button.configure(text="Pause", command=pause_timer)
         reset_button.configure(state=ctk.NORMAL)
         skip_break_button.configure(state=ctk.NORMAL if can_skip_break else ctk.DISABLED)
+        if started and timer_service.current_phase in ("short_break", "long_break"):
+            skip_break_button.grid()
+        else:
+            skip_break_button.grid_remove()
         mode_menu.configure(state=ctk.DISABLED if started else ctk.NORMAL)
         subject_menu.configure(state=ctk.DISABLED if started else ctk.NORMAL)
         if duration_picker is not None:
@@ -206,24 +213,16 @@ def run_app() -> None:
     button_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     button_frame.pack(fill="x", padx=10, pady=(0, 8))
 
-    start_button = ctk.CTkButton(button_frame, text="Start", command=start_timer)
-    start_button.grid(row=0, column=0, padx=8, pady=15, sticky="ew")
-    pause_button = ctk.CTkButton(
-        button_frame, text="Pause", command=pause_timer, state=ctk.DISABLED
-    )
-    pause_button.grid(row=0, column=1, padx=8, pady=15, sticky="ew")
-    resume_button = ctk.CTkButton(
-        button_frame, text="Resume", command=resume_timer, state=ctk.DISABLED
-    )
-    resume_button.grid(row=0, column=2, padx=8, pady=15, sticky="ew")
+    primary_button = ctk.CTkButton(button_frame, text="Start", command=start_timer)
+    primary_button.grid(row=0, column=0, padx=8, pady=15, sticky="ew")
     reset_button = ctk.CTkButton(button_frame, text="Reset", command=reset_timer)
-    reset_button.grid(row=0, column=3, padx=8, pady=15, sticky="ew")
+    reset_button.grid(row=0, column=1, padx=8, pady=15, sticky="ew")
     skip_break_button = ctk.CTkButton(
         button_frame, text="Skip Break", command=skip_break, state=ctk.DISABLED
     )
-    skip_break_button.grid(row=1, column=0, columnspan=4, padx=8, pady=(0, 15), sticky="ew")
+    skip_break_button.grid(row=1, column=0, columnspan=2, padx=8, pady=(0, 15), sticky="ew")
 
-    button_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+    button_frame.grid_columnconfigure((0, 1), weight=1)
 
     status_label = ctk.CTkLabel(left_frame, textvariable=status_var, font=("Helvetica", 14))
     status_label.pack(pady=(0, 6))
