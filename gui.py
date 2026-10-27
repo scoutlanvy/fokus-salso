@@ -94,7 +94,7 @@ def _run_app() -> None:
             balance_frame.pack_forget()
         balance = timer_service.break_balance_seconds
         balance_label.configure(text=f"Break balance: {timer_service.format_hms(balance)}")
-        available = (not started or choosing) and not timer_service.is_alarm_active and balance > 0
+        available = (not started or choosing or timer_service.can_break_paused_focus()) and not timer_service.is_alarm_active and balance > 0
         break_all_button.configure(
             text=(f"Break {balance // 60} min" if balance % 60 == 0
                   else f"Break {timer_service.format_hms(balance)}"),

@@ -36,6 +36,8 @@ Tanpa progres tersimpan, aplikasi dibuka dalam mode **Pomodoro**, dengan fokus 2
 
 Tekan **Space** saat jendela aplikasi aktif untuk **Pause/Resume** timer Manual, fokus Pomodoro, atau istirahat. Space tidak memulai timer, menghentikan alarm, atau memilih sesi berikutnya. Saat mengetik di kolom input, Space tetap berfungsi sebagai spasi. Menahan tombol hanya mengubah status sekali.
 
+Saat fokus Pomodoro **paused**, gunakan **Break** untuk memakai seluruh saldo atau **Choose Duration** untuk memilih durasi. Setelah break selesai dan alarm dihentikan, atau setelah **Skip Break**, sisa fokus kembali paused. Klik **Resume** saat siap. Menutup aplikasi selama break tetap menyimpan sisa break dan fokus tersebut.
+
 ## Mencoba Pomodoro dengan cepat
 
 Klik dua kali `Coba Pomodoro.vbs`. Mode ini memakai fokus 10 detik dan kredit istirahat 5, 5, 5, lalu 15 detik. Data percobaan disimpan terpisah. Tutup jendelanya dan buka `Study Timer.vbs` untuk kembali ke mode normal.

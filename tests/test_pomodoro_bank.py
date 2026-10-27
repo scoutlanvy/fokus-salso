@@ -149,6 +149,97 @@ def test_invalid_break_does_not_spend_balance(service, duration):
     assert repository.get_pomodoro_state() == (300, 1)
 
 
+@pytest.mark.parametrize("skip", [False, True])
+def test_paused_focus_break_returns_same_focus(service, fast_clock, skip):
+    repository.complete_pomodoro_focus("Umum", 1500)
+    service.start_pomodoro("English")
+    wait_for(lambda: service.current_phase == "focus")
+    assert not service.start_break(1)
+    service.pause_timer()
+    focus = repository.load_active_timer()
+    assert service.start_break(30 if skip else 2)
+    assert not service.start_break(1)
+    wait_for(lambda: service.current_phase == "break")
+    assert repository.load_active_timer().suspended_focus == focus
+    if skip:
+        service.skip_break()
+    else:
+        wait_for(lambda: service.is_alarm_active)
+        assert repository.get_pomodoro_state() == (298, 1)
+        service.stop_alarm()
+    wait_for(lambda: service.current_phase == "focus" and service.pause_event.is_set())
+    assert service.remaining_seconds == focus.remaining_seconds
+    assert repository.load_active_timer() == focus
+    assert len(repository.get_recent_sessions()) == 1
+    service.resume_timer()
+    wait_for(lambda: service.remaining_seconds < focus.remaining_seconds)
+
+
+@pytest.mark.parametrize("remaining", [0, 2])
+def test_recover_break_preserves_suspended_focus(service, fast_clock, remaining):
+    focus = repository.ActiveTimer("original-focus", "Pomodoro", "English", "focus", 1500, 1038, True)
+    saved = repository.ActiveTimer("break", "Pomodoro", "English", "break", 2, remaining, False, focus)
+    repository.complete_pomodoro_focus("Umum", 1500)
+    repository.save_active_timer(saved)
+    service.restore_progress()
+    if remaining:
+        wait_for(lambda: service.current_phase == "break")
+        assert service.pause_event.is_set()
+        assert repository.load_active_timer() == saved
+        assert service.suspend_for_close()
+        service.restore_progress()
+        service.resume_timer()
+        wait_for(lambda: service.is_alarm_active)
+        service.stop_alarm()
+    wait_for(lambda: service.current_phase == "focus" and service.pause_event.is_set())
+    assert service.remaining_seconds == 1038
+    assert repository.load_active_timer() == focus
+
+
+def test_interrupted_focus_completes_original_duration_once(service, fast_clock):
+    repository.complete_pomodoro_focus("Umum", 1500)
+    focus = repository.ActiveTimer("original-focus", "Pomodoro", "English", "focus", 100, 2, True)
+    repository.save_active_timer(focus)
+    service.restore_progress()
+    assert service.start_break(1)
+    wait_for(lambda: service.is_alarm_active)
+    service.stop_alarm()
+    wait_for(lambda: service.current_phase == "focus" and service.pause_event.is_set())
+    service.resume_timer()
+    wait_for(lambda: service.is_alarm_active)
+    assert repository.get_recent_sessions()[0][:2] == ("English", 100)
+    assert repository.get_pomodoro_state() == (599, 2)
+    assert len(repository.get_recent_sessions()) == 2
+
+
+def test_failed_paused_break_start_keeps_focus(service, monkeypatch):
+    repository.complete_pomodoro_focus("Umum", 1500)
+    service.start_pomodoro("Umum")
+    wait_for(lambda: service.current_phase == "focus")
+    service.pause_timer()
+    saved = repository.load_active_timer()
+    with monkeypatch.context() as patch:
+        def fail(*args):
+            raise sqlite3.OperationalError("disk full")
+        patch.setattr(timer_service, "save_active_timer", fail)
+        assert not service.start_break(2)
+    assert repository.load_active_timer() == saved
+    assert service.current_phase == "focus"
+    assert service.pause_event.is_set()
+
+
+def test_existing_progress_gains_suspended_focus_without_data_loss():
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("""CREATE TABLE active_timer (
+            id INTEGER PRIMARY KEY, session_id TEXT, mode TEXT, subject TEXT,
+            phase TEXT, total_seconds INTEGER, remaining_seconds INTEGER,
+            return_to_choice INTEGER)""")
+        connection.execute("INSERT INTO active_timer VALUES (1, 'saved', 'Pomodoro', 'English', 'focus', 1500, 1038, 1)")
+    expected = repository.ActiveTimer("saved", "Pomodoro", "English", "focus", 1500, 1038, True)
+    assert repository.load_active_timer() == expected
+    assert repository.load_active_timer() == expected
+
+
 def test_focus_requires_choice_and_guards_double_clicks(service, monkeypatch, fast_clock):
     original = service._run_countdown
     monkeypatch.setattr(service, "_run_countdown", lambda *args, **kwargs:

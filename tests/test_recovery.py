@@ -213,6 +213,7 @@ def test_failed_restore_blocks_start_and_reset_without_overwriting(monkeypatch):
     ("break", 0, True, "Continue Focus"), ("done", 0, False, "Start"),
 ])
 def test_gui_restores_controls_and_reset(phase, remaining, return_to_choice, expected, tmp_path):
+    repository.complete_pomodoro_focus("Umum", 1500)
     saved = snapshot(phase, remaining, 1500, return_to_choice)
     repository.save_active_timer(saved)
     script = """
@@ -242,6 +243,9 @@ def inspect(app):
             time.sleep(0.01)
         mode = next(w for w in widgets if isinstance(w, ctk.CTkOptionMenu) and 'Pomodoro' in w.cget('values'))
         subject = next(w for w in widgets if isinstance(w, ctk.CTkOptionMenu) and 'English' in w.cget('values'))
+        choose = next(w for w in widgets if isinstance(w, ctk.CTkButton) and w.cget('text') == 'Choose Duration')
+        assert choose.cget('state') == ('disabled' if saved.phase == 'manual' or (
+            saved.phase == 'break' and saved.remaining_seconds > 0) else 'normal')
         if saved.phase != 'done':
             assert mode.get() == saved.mode
             assert subject.get() == saved.subject

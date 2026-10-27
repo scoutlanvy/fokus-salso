@@ -104,6 +104,12 @@ nothing; Manual sessions never change the balance.
 Break uses the entire balance. Choose Duration accepts a positive duration no
 greater than the balance, with minutes and seconds limited to 0–59. Cancel changes
 nothing. Break controls are also available when Pomodoro is idle.
+They are also available while a Pomodoro focus is paused. The additive nullable
+`active_timer.suspended_focus` JSON column preserves the focus UUID, duration,
+subject, and remaining seconds during its break. After the break alarm is
+acknowledged or the break is skipped, that same focus returns paused. Recovery
+preserves both countdowns; a zero-second break restores its suspended focus
+directly. Manual timers and paused breaks cannot start another break.
 
 Only running break seconds are deducted. Paused time, alarm time, and decision
 time cost nothing. Skip Break returns to decision controls; Reset cancels the

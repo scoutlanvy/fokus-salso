@@ -1,5 +1,6 @@
 import sqlite3
-from dataclasses import dataclass, replace
+import json
+from dataclasses import asdict, dataclass, replace
 from contextlib import closing, contextmanager
 from datetime import datetime
 from typing import List, Tuple
@@ -17,6 +18,7 @@ class ActiveTimer:
     total_seconds: int
     remaining_seconds: int
     return_to_choice: bool = False
+    suspended_focus: "ActiveTimer | None" = None
 
 
 def _create_progress_tables(connection):
@@ -41,25 +43,42 @@ def _migrate_active_timer(connection):
         connection.execute("DROP TABLE active_timer")
         _create_progress_tables(connection)
     elif existing != expected:
-        connection.execute("DROP TABLE active_timer")
-        _create_progress_tables(connection)
+        if existing != expected | {"suspended_focus"}:
+            connection.execute("DROP TABLE active_timer")
+            _create_progress_tables(connection)
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(active_timer)")}
+    if "suspended_focus" not in columns:
+        connection.execute("ALTER TABLE active_timer ADD COLUMN suspended_focus TEXT")
 
 
 def _write_active_timer(connection, timer):
     connection.execute("""INSERT OR REPLACE INTO active_timer
-        (id, session_id, mode, subject, phase, total_seconds, remaining_seconds, return_to_choice)
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?)""",
+        (id, session_id, mode, subject, phase, total_seconds, remaining_seconds, return_to_choice, suspended_focus)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (timer.session_id, timer.mode, timer.subject, timer.phase,
-         timer.total_seconds, timer.remaining_seconds, int(timer.return_to_choice)))
+         timer.total_seconds, timer.remaining_seconds, int(timer.return_to_choice),
+         json.dumps(asdict(timer.suspended_focus)) if timer.suspended_focus else None))
 
 
 def load_active_timer():
     with _pomodoro_transaction() as connection:
         row = connection.execute("""SELECT session_id, mode, subject, phase,
-            total_seconds, remaining_seconds, return_to_choice FROM active_timer WHERE id = 1""").fetchone()
+            total_seconds, remaining_seconds, return_to_choice, suspended_focus FROM active_timer WHERE id = 1""").fetchone()
         if row is None:
             return None
-        timer = ActiveTimer(*row[:-1], bool(row[-1]))
+        try:
+            suspended = ActiveTimer(**json.loads(row[-1])) if row[-1] else None
+        except (TypeError, ValueError) as error:
+            raise sqlite3.DatabaseError("Invalid suspended focus") from error
+        timer = ActiveTimer(*row[:6], bool(row[6]), suspended)
+        if suspended is not None and (
+                timer.phase != "break" or suspended.phase != "focus"
+                or suspended.mode != "Pomodoro" or suspended.subject != timer.subject
+                or not suspended.session_id or suspended.suspended_focus is not None
+                or type(suspended.total_seconds) is not int
+                or type(suspended.remaining_seconds) is not int
+                or not 0 < suspended.remaining_seconds <= suspended.total_seconds):
+            raise sqlite3.DatabaseError("Invalid suspended focus")
         if (type(timer.total_seconds) is not int or type(timer.remaining_seconds) is not int
                 or timer.total_seconds <= 0 or timer.remaining_seconds < 0
                 or timer.mode not in ("Manual", "Pomodoro")

@@ -47,6 +47,8 @@ class TimerService:
         self._choice = None
         self._progress = None
         self._restoring = False
+        self._focus_break_event = threading.Event()
+        self._storage_retry = False
         self.storage_blocked = not self._load_balance()
 
     def _checkpoint(self, timer):
@@ -65,6 +67,10 @@ class TimerService:
         """Called after GUI initialization; recovered countdowns always start paused."""
         try:
             timer = load_active_timer()
+            if (timer is not None and timer.phase == "break"
+                    and timer.remaining_seconds == 0 and timer.suspended_focus is not None):
+                timer = timer.suspended_focus
+                save_active_timer(timer)
             if timer is not None and (timer.phase == "done" or (
                     timer.phase == "break" and timer.remaining_seconds == 0
                     and not timer.return_to_choice)):
@@ -153,7 +159,9 @@ class TimerService:
                 if self.pause_event.is_set():
                     continue
                 try:
+                    self._storage_retry = True
                     result = operation()
+                    self._storage_retry = False
                     if result is not None:
                         self.break_balance_seconds, self.cycle_position = result
                     return True
@@ -221,8 +229,12 @@ class TimerService:
         elapsed = 0.0
         previous = time.monotonic()
         while self.pause_event.is_set() and not self.stop_event.wait(0.05):
+            if self._focus_break_event.is_set():
+                return False
             previous = time.monotonic()
         while self.remaining_seconds > 0 and not self.stop_event.is_set():
+            if self._focus_break_event.is_set():
+                return False
             if can_skip_break and self.skip_break_event.is_set():
                 self.set_countdown("00:00:00")
                 return False
@@ -233,6 +245,8 @@ class TimerService:
                 continue
             self.stop_event.wait(0.05)
             now = time.monotonic()
+            if self._focus_break_event.is_set():
+                return False
             if self.stop_event.is_set() or self.pause_event.is_set() or self.skip_break_event.is_set():
                 previous = now
                 continue
@@ -249,6 +263,8 @@ class TimerService:
                 if self.pause_event.is_set():
                     continue
             def tick():
+                if self._focus_break_event.is_set():
+                    return None
                 timer = replace(self._progress, remaining_seconds=self.remaining_seconds - 1)
                 if self.current_phase == "break":
                     result = consume_break_second(timer)
@@ -324,6 +340,11 @@ class TimerService:
                         break
                     status = f"Pomodoro focus {self.cycle_position + 1}/{config.POMODORO_TOTAL_SESSIONS}"
                     if not self._run_countdown(focus_seconds, status):
+                        if self._focus_break_event.is_set() and not self.stop_event.is_set():
+                            self._focus_break_event.clear()
+                            action, duration = "break", self._progress.total_seconds
+                            self._restoring = True
+                            continue
                         break
                     def complete_focus():
                         result = complete_pomodoro_focus(subject, focus_seconds, self._progress)
@@ -340,6 +361,16 @@ class TimerService:
                     completed = self._run_countdown(duration, "Using break balance", can_skip_break=True)
                     if self.stop_event.is_set():
                         break
+                    if self._progress.suspended_focus is not None:
+                        focus = self._progress.suspended_focus
+                        if completed:
+                            self._beep()
+                        if not self._persist_with_retry(lambda: self._checkpoint(focus)):
+                            break
+                        self.pause_event.set()
+                        self._restoring = True
+                        action = "focus"
+                        continue
                     if completed:
                         destination = "choice" if return_to_choice else "done"
                         if not self._persist_with_retry(lambda: self._checkpoint(
@@ -422,13 +453,34 @@ class TimerService:
         with self._command_lock:
             if not isinstance(total_seconds, int) or isinstance(total_seconds, bool) or total_seconds <= 0:
                 return False
-            if self.is_alarm_active or (self.is_running and self.current_phase != "choice"):
+            paused_focus = self.can_break_paused_focus()
+            if self.is_alarm_active or (self.is_running and self.current_phase != "choice" and not paused_focus):
                 return False
             if not self._load_balance() or total_seconds > self.break_balance_seconds:
                 return False
+            if paused_focus:
+                focus = self._progress
+                progress = ActiveTimer(str(uuid4()), "Pomodoro", focus.subject,
+                                       "break", total_seconds, total_seconds, False, focus)
+                try:
+                    self._checkpoint(progress)
+                except (OSError, sqlite3.Error) as error:
+                    self._storage_error(error)
+                    return False
+                self.current_phase = "transition"
+                self._focus_break_event.set()
+                self.pause_event.clear()
+                self.update_control_state(True, False, False)
+                return True
             if self.current_phase == "choice":
                 return self._submit_choice("break", total_seconds)
             return self._launch(self.pomodoro_loop, (subject, "break", total_seconds), pomodoro=True)
+
+    def can_break_paused_focus(self) -> bool:
+        return (self.is_running and self.current_phase == "focus"
+                and self.pause_event.is_set() and not self._storage_retry
+                and self._progress is not None and self._progress.phase == "focus"
+                and self._progress.remaining_seconds > 0)
 
     def pause_timer(self) -> None:
         if not self.is_running or self.is_alarm_active or self.pause_event.is_set() or self.current_phase not in ("manual", "focus", "break"):
@@ -473,6 +525,8 @@ class TimerService:
                 self.update_control_state(self.is_running, True)
                 return False
             self._progress = None
+            self._focus_break_event.clear()
+            self._storage_retry = False
             self.stop_event.set()
             self._choice_event.set()
             self.stop_alarm()
