@@ -91,6 +91,10 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
             assert mode.get() == "Pomodoro"
             assert not service.is_running
             assert button("Start").cget("state") == "normal"
+            app.focus_force()
+            app.event_generate("<KeyPress-space>")
+            app.event_generate("<KeyRelease-space>")
+            assert not service.is_running
             def displayed(value):
                 return any(isinstance(w, ctk.CTkLabel)
                            and str(w.cget("textvariable"))
@@ -136,6 +140,15 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
                  and w.cget("text").startswith("Break ")).invoke()
             pump(lambda: service.current_phase == "break")
             pump(lambda: button("Skip Break").cget("state") == "normal")
+            app.focus_force()
+            app.event_generate("<KeyPress-space>")
+            assert service.pause_event.is_set()
+            app.event_generate("<KeyPress-space>")
+            assert service.pause_event.is_set()  # Holding Space cannot resume.
+            app.event_generate("<KeyRelease-space>")
+            app.event_generate("<KeyPress-space>")
+            assert not service.pause_event.is_set()
+            app.event_generate("<KeyRelease-space>")
             button("Skip Break").invoke()
             pump(lambda: service.current_phase == "choice")
             button("Reset").invoke()

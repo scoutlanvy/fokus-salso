@@ -34,6 +34,8 @@ Atau jalankan dari PowerShell:
 
 Tanpa progres tersimpan, aplikasi dibuka dalam mode **Pomodoro**, dengan fokus 25 menit yang menunggu tombol **Start** ditekan. Pilih subjek jika diperlukan. Untuk mode Manual, pilih **Manual** dan atur durasi terlebih dahulu. Setelah alarm Pomodoro dihentikan dengan **Stop Alarm**, pilih **Continue Focus** atau gunakan saldo istirahat. Fase berikutnya menunggu pilihan pengguna.
 
+Tekan **Space** saat jendela aplikasi aktif untuk **Pause/Resume** timer Manual, fokus Pomodoro, atau istirahat. Space tidak memulai timer, menghentikan alarm, atau memilih sesi berikutnya. Saat mengetik di kolom input, Space tetap berfungsi sebagai spasi. Menahan tombol hanya mengubah status sekali.
+
 ## Mencoba Pomodoro dengan cepat
 
 Klik dua kali `Coba Pomodoro.vbs`. Mode ini memakai fokus 10 detik dan kredit istirahat 5, 5, 5, lalu 15 detik. Data percobaan disimpan terpisah. Tutup jendelanya dan buka `Study Timer.vbs` untuk kembali ke mode normal.

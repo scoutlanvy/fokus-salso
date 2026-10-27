@@ -80,6 +80,11 @@ The primary button shows Start, Pause, Resume, Continue Focus, or Stop Alarm
 according to state. Reset and completion of an idle break return it to Start.
 Skip Break is visible during breaks but disabled while paused or sounding an alarm.
 
+Space pauses/resumes active Manual, focus, and break countdowns while the main
+window has focus. It ignores text inputs and modal dialogs, and never starts a
+timer, acknowledges alarms, or continues a choice. Repeated key presses while
+held are suppressed until release; losing window focus clears the held state.
+
 The alarm loops until acknowledged. Pomodoro then waits for an explicit focus or
 break decision; no next phase starts automatically. Reset cancels the alarm and
 current sequence; closing the window also stops playback.

@@ -195,6 +195,40 @@ def _run_app() -> None:
     def resume_timer() -> None:
         timer_service.resume_timer()
 
+    space_held = False
+
+    def on_space_press(event):
+        nonlocal space_held
+        if (event.widget.winfo_toplevel() != app
+                or event.widget.winfo_class() in ("Entry", "TEntry", "Text", "Spinbox", "TSpinbox")
+                or app.grab_current() is not None):
+            return
+        if space_held:
+            return "break"
+        space_held = True
+        if (not closing and not timer_service.storage_blocked
+                and timer_service.is_running and not timer_service.is_alarm_active
+                and timer_service.current_phase in ("manual", "focus", "break")):
+            if timer_service.pause_event.is_set():
+                resume_timer()
+            else:
+                pause_timer()
+        return "break"
+
+    def on_space_release(event):
+        nonlocal space_held
+        space_held = False
+
+    def on_focus_out(event):
+        def clear_if_unfocused():
+            if not closing and app.focus_get() is None:
+                on_space_release(event)
+        app.after_idle(clear_if_unfocused)
+
+    app.bind("<KeyPress-space>", on_space_press, add="+")
+    app.bind("<KeyRelease-space>", on_space_release, add="+")
+    app.bind("<FocusOut>", on_focus_out, add="+")
+
     def reset_timer() -> None:
         nonlocal duration_dialog
         if duration_dialog is not None and duration_dialog.winfo_exists():
