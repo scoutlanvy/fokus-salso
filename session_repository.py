@@ -32,8 +32,22 @@ def _create_progress_tables(connection):
     )""")
 
 
+def _migrate_active_timer(connection):
+    cursor = connection.execute("PRAGMA table_info(active_timer)")
+    existing = {row[1] for row in cursor.fetchall()}
+    expected = {"id", "session_id", "mode", "subject", "phase",
+                "total_seconds", "remaining_seconds", "return_to_choice"}
+    if existing and not expected.issubset(existing):
+        connection.execute("DROP TABLE active_timer")
+        _create_progress_tables(connection)
+    elif existing != expected:
+        connection.execute("DROP TABLE active_timer")
+        _create_progress_tables(connection)
+
+
 def _write_active_timer(connection, timer):
     connection.execute("""INSERT OR REPLACE INTO active_timer
+        (id, session_id, mode, subject, phase, total_seconds, remaining_seconds, return_to_choice)
         VALUES (1, ?, ?, ?, ?, ?, ?, ?)""",
         (timer.session_id, timer.mode, timer.subject, timer.phase,
          timer.total_seconds, timer.remaining_seconds, int(timer.return_to_choice)))
@@ -104,6 +118,7 @@ def _pomodoro_transaction():
             """)
             connection.execute("INSERT OR IGNORE INTO pomodoro_state VALUES (1, 0, 0)")
             _create_progress_tables(connection)
+            _migrate_active_timer(connection)
             yield connection
 
 
