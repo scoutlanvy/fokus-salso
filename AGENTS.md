@@ -10,6 +10,9 @@
 - Perbarui PROJECT_OVERVIEW.md jika rincian teknis berubah; perbarui README.md jika instalasi atau penggunaan berubah.
 - Jalankan pemeriksaan yang relevan.
 - Jelaskan hasil perubahan, validasi, dan kendala.
+- Sebelum membuat folder baru di proyek, jelaskan nama dan tujuannya kepada pengguna.
+- Gunakan direktori sementara sistem untuk pengujian.
+- Setelah selesai, bersihkan hanya artefak sementara yang dibuat sendiri dan laporkan file atau folder baru yang tersisa.
 
 ## Pemeriksaan
 
