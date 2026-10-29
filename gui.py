@@ -49,6 +49,8 @@ def _run_app() -> None:
         if closing:
             return
         countdown_var.set(value)
+        if selected_mode.get() == "Pomodoro":
+            refresh_focus_target(update_idle_timer=False)
 
     def set_status(value: str) -> None:
         if closing:
@@ -108,6 +110,32 @@ def _run_app() -> None:
                            break_all_button, choose_duration_button):
                 widget.configure(state=ctk.DISABLED)
             duration_picker.set_enabled(False)
+        else:
+            refresh_focus_target()
+
+    def refresh_focus_target(update_idle_timer=True):
+        if selected_mode.get() != "Pomodoro":
+            target_progress_label.pack_forget()
+            return
+        target_progress_label.pack(pady=(0, 12))
+        target = config.POMODORO_FOCUS_SECONDS
+        if timer_service.is_running:
+            progress = timer_service.focus_target_progress()
+            progress = 0 if progress is None else progress
+        elif update_idle_timer:
+            remaining = timer_service.focus_seconds_remaining(selected_subject.get())
+            if remaining is None:
+                target_progress_label.configure(text="Target progress unavailable")
+                countdown_var.set("--:--:--")
+                primary_button.configure(text="Retry", state=ctk.NORMAL,
+                                         command=lambda: update_control_state(False))
+                return
+            countdown_var.set(timer_service.format_hms(remaining))
+            progress = target - remaining
+        else:
+            return
+        target_progress_label.configure(
+            text=f"Target progress: {timer_service.format_hms(progress)} / {timer_service.format_hms(target)}")
 
     def show_storage_error(message: str) -> None:
         if closing:
@@ -179,8 +207,8 @@ def _run_app() -> None:
             return
 
         if selected_mode.get() == "Pomodoro":
-            countdown_var.set(timer_service.format_hms(config.POMODORO_FOCUS_SECONDS))
             timer_service.start_pomodoro(selected_subject.get())
+            update_control_state(timer_service.is_running)
             return
 
         total_seconds = duration_picker.get_total_seconds()
@@ -238,6 +266,8 @@ def _run_app() -> None:
         duration_dialog = None
         if not timer_service.reset_timer():
             return
+        if history_panel is not None:
+            history_panel.refresh()
         errors = []
         while True:
             try:
@@ -263,7 +293,7 @@ def _run_app() -> None:
                 )
             )
         else:
-            countdown_var.set(timer_service.format_hms(config.POMODORO_FOCUS_SECONDS))
+            refresh_focus_target()
             status_var.set("Pomodoro ready")
 
     def skip_break() -> None:
@@ -428,6 +458,7 @@ def _run_app() -> None:
         font=("Consolas", 44, "bold"),
     )
     countdown_label.pack(pady=16)
+    target_progress_label = ctk.CTkLabel(countdown_frame, text="", font=("Consolas", 13))
 
     balance_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     balance_label = ctk.CTkLabel(balance_frame, text="Break balance: 00:00:00", font=("Consolas", 16, "bold"))
@@ -459,6 +490,7 @@ def _run_app() -> None:
     history_panel = HistoryPanel(right_frame, compact=True)
     history_panel.pack(fill="both", expand=True, padx=8, pady=8)
 
+    selected_subject.trace_add("write", lambda *_: update_control_state(timer_service.is_running))
     set_mode(selected_mode.get())
     restored = timer_service.restore_progress()
     if restored is not None:

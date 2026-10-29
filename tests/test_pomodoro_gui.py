@@ -195,3 +195,73 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
 
     monkeypatch.setattr(ctk.CTk, "mainloop", inspect)
     gui.run_app()
+
+
+def test_gui_subject_accumulation_and_read_retry(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
+    monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
+    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    repository.reset_active_timer(repository.ActiveTimer(
+        "partial-umum", "Pomodoro", "Umum", "focus", 1500, 607, True))
+    errors = []
+    monkeypatch.setattr(gui.messagebox, "showerror", lambda *args, **kwargs: errors.append(args))
+
+    def inspect(app):
+        def descendants(parent):
+            for child in parent.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        def button(text):
+            return next(w for w in descendants(app)
+                        if isinstance(w, ctk.CTkButton) and w.cget("text") == text)
+
+        def displayed(value):
+            return any(isinstance(w, ctk.CTkLabel) and str(w.cget("textvariable"))
+                       and app.getvar(str(w.cget("textvariable"))) == value
+                       for w in descendants(app))
+
+        def target(value):
+            return any(isinstance(w, ctk.CTkLabel) and w.cget("text") == value
+                       for w in descendants(app))
+
+        try:
+            app.update()
+            subject = next(w for w in descendants(app) if isinstance(w, ctk.CTkOptionMenu)
+                           and "Umum" in w.cget("values"))
+            assert displayed("00:10:07")
+            assert target("Target progress: 00:14:53 / 00:25:00")
+            button("Reset").invoke()
+            assert displayed("00:10:07")
+            subject.set("English")
+            assert displayed("00:25:00")
+            subject.set("Umum")
+            assert displayed("00:10:07")
+            mode = next(w for w in descendants(app) if isinstance(w, ctk.CTkOptionMenu)
+                        and "Manual" in w.cget("values"))
+            mode.cget("command")("Manual")
+            assert displayed("00:00:00")
+            mode.cget("command")("Pomodoro")
+            assert displayed("00:10:07")
+            original_read = timer_service.get_focus_progress
+
+            def fail(_):
+                raise repository.sqlite3.OperationalError("read failure")
+
+            monkeypatch.setattr(timer_service, "get_focus_progress", fail)
+            subject.set("English")
+            assert displayed("--:--:--")
+            assert button("Retry").cget("state") == "normal"
+            assert repository.load_active_timer() is None
+            monkeypatch.setattr(timer_service, "get_focus_progress", original_read)
+            button("Retry").invoke()
+            assert button("Start").cget("state") == "normal"
+            assert displayed("00:25:00")
+            subject.set("Umum")
+            assert displayed("00:10:07")
+            assert repository.get_summary_by_subject() == [("Umum", 893, 1)]
+        finally:
+            app.tk.call(app.protocol("WM_DELETE_WINDOW"))
+
+    monkeypatch.setattr(ctk.CTk, "mainloop", inspect)
+    gui.run_app()

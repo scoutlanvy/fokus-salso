@@ -55,7 +55,13 @@ Riwayat, saldo istirahat, posisi siklus Pomodoro, dan progres timer tersimpan se
 
 Progres Manual, fokus Pomodoro, dan istirahat disimpan setiap detik. Jika aplikasi ditutup pada `24:52`, saat dibuka kembali sisa waktunya tetap `24:52` dalam keadaan **Pause**. Tekan **Resume** untuk melanjutkan; waktu selama aplikasi tertutup tidak dihitung. Mode dan subjek ikut dipulihkan dan terkunci selama sesi aktif.
 
-Progres juga dipulihkan dari detik terakhir yang berhasil disimpan jika aplikasi crash atau komputer mati mendadak. **Reset** membuang progres aktif dan mengembalikan durasi awal, tanpa menghapus riwayat atau saldo istirahat.
+Progres juga dipulihkan dari detik terakhir yang berhasil disimpan jika aplikasi crash atau komputer mati mendadak. **Reset** pada Pomodoro otomatis mencatat waktu fokus yang sudah dijalani dan mengumpulkannya menuju target 25 menit untuk subjek tersebut. Contohnya, setelah belajar **14:53**, Reset mencatat bagian itu ke riwayat dan timer menampilkan sisa **10:07**, menunggu **Start**. Setelah sisa itu selesai, total fokus mencapai 25 menit, bonus istirahat diberikan sekali, dan target berikutnya kembali **25:00**. Riwayat mencatat **14:53 + 10:07**, tanpa menghitung waktu yang sama dua kali. Reset berulang tanpa belajar tidak mengurangi progres.
+
+Setiap subjek memiliki progres sendiri: mengganti dari Umum ke English menampilkan sisa target English; kembali ke Umum menampilkan sisa target Umum. **Target progress** menunjukkan waktu terkumpul ditambah fokus yang sedang berjalan. Akumulasi tetap tersimpan setelah aplikasi ditutup. Waktu paused, aplikasi tertutup, dan break tidak dihitung sebagai fokus. Jika Reset dilakukan saat break dengan fokus tertunda, hanya bagian fokus yang ditambahkan. Reset saat fokus sudah mencapai nol menyelesaikan target dan bonusnya sekali. Saldo istirahat dan urutan bonus 5, 5, 5, lalu 15 menit tetap bersama untuk semua subjek.
+
+Akumulasi dimulai dari penggunaan fitur ini; riwayat lama tidak dihitung ulang. Mode percobaan memakai aturan yang sama dengan target 10 detik. Jika sisa target tidak dapat dibaca, **Start** diganti **Retry**; klik untuk membaca ulang sebelum memulai.
+
+**Reset** pada mode Manual tetap membuang progres aktif dan kembali ke **00:00:00**. Riwayat sebelumnya serta daftar dan pilihan subjek tetap dipertahankan. Jika penyimpanan saat Reset gagal, progres tetap paused; perbaiki kendala penyimpanan lalu tekan **Reset** lagi.
 
 Jika aplikasi ditutup saat alarm berbunyi, sesi yang sudah selesai tidak dicatat ulang dan alarm tidak diputar saat dibuka kembali. Pomodoro menampilkan pilihan sesi berikutnya; Manual kembali siap memulai.
 

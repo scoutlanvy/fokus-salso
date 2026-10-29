@@ -10,7 +10,8 @@ from typing import Callable, Optional
 import config
 from session_repository import (
     save_session, get_pomodoro_state, complete_pomodoro_focus, consume_break_second,
-    ActiveTimer, load_active_timer, save_active_timer, clear_active_timer,
+    ActiveTimer, load_active_timer, save_active_timer, clear_active_timer, reset_active_timer,
+    get_focus_progress,
 )
 
 Callback = Callable[[str], None]
@@ -59,9 +60,31 @@ class TimerService:
         if self._restoring:
             self._restoring = False
             return True
-        timer = ActiveTimer(str(uuid4()), "Manual" if phase == "manual" else "Pomodoro",
-                            subject, phase, seconds, seconds, return_to_choice)
-        return self._persist_with_retry(lambda: self._checkpoint(timer))
+        def prepare():
+            duration = (config.POMODORO_FOCUS_SECONDS - get_focus_progress(subject)
+                        if phase == "focus" else seconds)
+            timer = ActiveTimer(str(uuid4()), "Manual" if phase == "manual" else "Pomodoro",
+                                subject, phase, duration, duration, return_to_choice)
+            self._checkpoint(timer)
+        return self._persist_with_retry(prepare)
+
+    def focus_seconds_remaining(self, subject):
+        """Read the next idle target; callers must not start if reading fails."""
+        try:
+            return config.POMODORO_FOCUS_SECONDS - get_focus_progress(subject)
+        except (OSError, sqlite3.Error) as error:
+            self._storage_error(error)
+            return None
+
+    def focus_target_progress(self):
+        """Active progress includes the carried portion and this running segment."""
+        with self._command_lock:
+            focus = self._progress
+            if focus is not None and focus.phase == "break":
+                focus = focus.suspended_focus
+            if focus is not None and focus.mode == "Pomodoro" and focus.phase == "focus":
+                return max(0, config.POMODORO_FOCUS_SECONDS - focus.remaining_seconds)
+            return None
 
     def restore_progress(self):
         """Called after GUI initialization; recovered countdowns always start paused."""
@@ -338,6 +361,7 @@ class TimerService:
                                      else config.POMODORO_FOCUS_SECONDS)
                     if not self._prepare_phase("focus", subject, focus_seconds, True):
                         break
+                    focus_seconds = self._progress.total_seconds
                     status = f"Pomodoro focus {self.cycle_position + 1}/{config.POMODORO_TOTAL_SESSIONS}"
                     if not self._run_countdown(focus_seconds, status):
                         if self._focus_break_event.is_set() and not self.stop_event.is_set():
@@ -410,7 +434,10 @@ class TimerService:
             elif len(args) > 1 and args[1] == "break":
                 phase, seconds, subject = "break", args[2], args[0]
             else:
-                phase, seconds, subject = "focus", config.POMODORO_FOCUS_SECONDS, args[0]
+                phase, subject = "focus", args[0]
+                seconds = self.focus_seconds_remaining(subject)
+                if seconds is None:
+                    return False
             progress = ActiveTimer(str(uuid4()), "Pomodoro" if pomodoro else "Manual",
                                    subject, phase, seconds, seconds, phase == "focus")
             try:
@@ -519,7 +546,9 @@ class TimerService:
                 return False
             self.pause_event.set()
             try:
-                clear_active_timer()
+                result = reset_active_timer(self._progress)
+                if result is not None:
+                    self.break_balance_seconds, self.cycle_position = result
             except (OSError, sqlite3.Error) as error:
                 self._storage_error(error)
                 self.update_control_state(self.is_running, True)

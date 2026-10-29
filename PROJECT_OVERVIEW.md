@@ -21,7 +21,9 @@ Session records contain subject, duration in seconds, and time in `Asia/Jakarta`
 Manual sessions save when countdown completes; Pomodoro sessions save when focus
 completes, before the alarm. Records from previous external services are not migrated.
 
-Timer write failures pause progress: Resume retries the pending transaction; Reset cancels it.
+Timer write failures pause progress: Resume retries the pending transaction; Reset
+cancels it after saving elapsed Pomodoro focus. A failed Reset leaves progress
+paused and intact; retry Reset to save and clear it.
 History read failures show an unavailable message without closing the application.
 
 The `pomodoro_state` table holds break balance in seconds and position in the
@@ -48,7 +50,25 @@ After GUI construction, unfinished countdowns restore paused with Resume and
 locked mode/subject controls. A completed focus restores to choice without an
 alarm; a completed Manual or idle break restores to default idle. A break checkpoint
 at zero is similarly treated as completed, even if a crash interrupted its transition.
-Reset removes only active progress and joins the old worker before accepting a new session.
+Reset atomically records elapsed Pomodoro focus and removes active progress, then
+joins the old worker before accepting a new session. Elapsed duration is original
+minus remaining whole seconds; paused/offline time is excluded. A break with a
+suspended focus records only that focus's elapsed duration. Zero elapsed time,
+Manual progress, breaks without a suspended focus, and already completed sessions
+add no history. The focus UUID completion marker prevents duplicate records on
+retry. Partial sessions count toward history summaries and the subject's next
+focus target. They award no break credit until that target is complete. Reset at
+zero remaining finalizes the target and its reward once, including a pending
+completion transaction. Manual reset behavior is unchanged.
+
+The additive `subject_focus_progress` table stores already recorded focus seconds
+per subject. Old history is not reinterpreted. Reset adds only the new segment's
+elapsed seconds in the same transaction as history, UUID marker, and progress
+removal. The next segment lasts `POMODORO_FOCUS_SECONDS - accumulated_seconds`;
+its `active_timer.total_seconds` stores this shortened duration. Completion saves
+only the final segment, clears the subject accumulation, awards the shared break
+reward, advances the shared cycle, and checkpoints choice atomically. Completed
+targets never count an earlier segment twice. Normal and preview data are isolated.
 
 Close freezes progress under the command lock, saves it, then stops and joins the
 worker. A write failure keeps the window open; countdowns stay paused. A recovery
@@ -60,7 +80,13 @@ or process death. Normal and preview paths use different mutexes and databases.
 
 Without saved progress, launch defaults to Pomodoro. Mode initialization displays
 the configured focus duration and controls without starting the timer. Recovery
-then applies the saved mode and remaining time. Manual remains selectable when idle.
+then applies the saved mode and remaining time. Idle Pomodoro displays the selected
+subject's remaining target and waits for Start. Manual remains selectable when idle.
+The Target progress label combines recorded accumulation with the active segment's
+elapsed seconds, including a suspended focus during its break. Subject changes,
+Reset, and mode changes refresh the target. Failed idle progress reads replace
+Start with Retry until a successful read; starting also rechecks storage before
+creating a checkpoint. Active preparation failures pause for Resume to retry.
 
 The resizable window defaults to 900x620. The left column contains timer controls
 and scrolls in small windows; the right contains history. Subject defaults to `Umum`
@@ -103,8 +129,9 @@ widget updates and error dialogs run on the UI thread.
 
 Durations are configured in `config.py`; normal focus is 25 minutes with rewards
 of 5, 5, 5, then 15 minutes, repeating indefinitely. Balance and cycle position are
-shared across subjects and survive Reset and restarts. Interrupted focuses award
-nothing; Manual sessions never change the balance.
+shared across subjects and survive Reset and restarts. Each subject has its own
+accumulation toward the focus target; completed targets award the next shared
+reward. Manual sessions never change the balance or focus accumulation.
 
 Break uses the entire balance. Choose Duration accepts a positive duration no
 greater than the balance, with minutes and seconds limited to 0–59. Cancel changes
@@ -129,6 +156,7 @@ Summary shows total duration and session count per subject, sorted by most sessi
 Recent Sessions shows the latest 30 sessions with time, subject, and duration.
 The panel queries SQLite directly, shows an empty state when needed, and refreshes
 after a session saves successfully.
+Successful Reset also refreshes history immediately, keeping the selected subject.
 
 ## Preview Isolation
 
