@@ -396,6 +396,40 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
 
         try:
             app.update()
+            history = next(w for w in widgets() if isinstance(w, gui.HistoryPanel))
+            assert not history.winfo_ismapped()
+            toggle = button("Show History")
+            timer_content = toggle.master.master
+            timer_controls = button("Start").master
+
+            def timer_widths():
+                # The cards must follow the visible canvas, not just its outer grid column.
+                assert abs(timer_content.winfo_width() - timer_content.master.winfo_width()) <= 1
+                assert timer_controls.winfo_width() >= timer_content.winfo_width() - 60
+                return timer_content.winfo_width(), timer_controls.winfo_width()
+
+            for size in ("1100x700", "900x620", "1100x700"):
+                app.geometry(size)
+                app.update()
+                hidden_widths = timer_widths()
+                toggle.invoke()
+                app.update()
+                assert history.winfo_ismapped()
+                assert toggle.cget("text") == "Hide History"
+                shown_widths = timer_widths()
+                assert all(hidden > shown for hidden, shown in zip(hidden_widths, shown_widths))
+                history.tabview.set("Recent Sessions")
+                toggle.invoke()
+                app.update()
+                assert not history.winfo_ismapped()
+                assert timer_widths() == hidden_widths
+                layout = history.master.master
+                assert layout.grid_bbox(column=1, row=0)[2] == 0
+            toggle.invoke()
+            app.update()
+            assert history.tabview.get() == "Recent Sessions"
+            history.tabview.set("Summary")
+            toggle.invoke()
             subject = next(w for w in widgets() if isinstance(w, ctk.CTkOptionMenu) and "Umum" in w.cget("values"))
             assert subject.get() == "Umum"
             monkeypatch.setattr(ctk, "CTkInputDialog", lambda **kwargs: SimpleNamespace(get_input=lambda: "  Matematika  "))
@@ -443,6 +477,12 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
             button("Start").invoke()
             stopped_alarm_to_choice()
             assert button("Break 10 min").cget("state") == "normal"
+            toggle.invoke()
+            app.update()
+            assert history.winfo_ismapped()
+            assert any(isinstance(w, ctk.CTkLabel) and w.cget("text") == "50m (2 sessions)"
+                       for w in descendants(history.summary_scroll))
+            toggle.invoke()
             button("Continue Focus").invoke()
             stopped_alarm_to_choice()
             assert service.break_balance_seconds == 900
@@ -457,9 +497,19 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
                  and w.cget("text").startswith("Break ")).invoke()
             pump(lambda: service.current_phase == "break")
             pump(lambda: button("Skip Break").cget("state") == "normal")
+            toggle.invoke()
+            toggle.invoke()
+            assert service.is_running
+            assert service.current_phase == "break"
+            assert subject.get() == "Umum"
             app.focus_force()
             app.event_generate("<KeyPress-space>")
             assert service.pause_event.is_set()
+            paused_remaining = service.remaining_seconds
+            toggle.invoke()
+            toggle.invoke()
+            assert service.pause_event.is_set()
+            assert service.remaining_seconds == paused_remaining
             app.event_generate("<KeyPress-space>")
             assert service.pause_event.is_set()  # Holding Space cannot resume.
             app.event_generate("<KeyRelease-space>")

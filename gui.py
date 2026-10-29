@@ -605,21 +605,44 @@ def _run_app() -> None:
     main_frame = ctk.CTkFrame(app, corner_radius=0, fg_color="transparent")
     main_frame.pack(fill="both", expand=True, padx=0, pady=0)
     main_frame.grid_columnconfigure(0, weight=3)
-    main_frame.grid_columnconfigure(1, weight=2)
+    main_frame.grid_columnconfigure(1, weight=0)
     main_frame.grid_rowconfigure(0, weight=1)
 
     left_frame = ctk.CTkScrollableFrame(main_frame, corner_radius=0, fg_color="transparent")
-    left_frame.grid(row=0, column=0, sticky="nsew", padx=(16, 8), pady=16)
+    left_frame.grid(row=0, column=0, sticky="nsew", padx=16, pady=16)
 
     right_frame = ctk.CTkFrame(main_frame, corner_radius=12)
     right_frame.grid(row=0, column=1, sticky="nsew", padx=(8, 16), pady=16)
+    right_frame.grid_remove()
+
+    history_visible = False
+
+    def toggle_history():
+        nonlocal history_visible
+        history_visible = not history_visible
+        if history_visible:
+            main_frame.grid_columnconfigure(1, weight=2)
+            left_frame.grid(padx=(16, 8))
+            right_frame.grid()
+        else:
+            right_frame.grid_remove()
+            main_frame.grid_columnconfigure(1, weight=0)
+            left_frame.grid(padx=16)
+        history_toggle.configure(text="Hide History" if history_visible else "Show History")
+
+    header_frame = ctk.CTkFrame(left_frame, fg_color="transparent")
+    header_frame.pack(fill="x", padx=10, pady=(8, 12))
 
     header_label = ctk.CTkLabel(
-        left_frame,
+        header_frame,
         text="⏱️ Study Timer",
         font=("Helvetica", 22, "bold"),
     )
-    header_label.pack(pady=(8, 12))
+    header_label.pack(side="left", expand=True)
+    history_toggle = ctk.CTkButton(
+        header_frame, text="Show History", width=110, command=toggle_history,
+    )
+    history_toggle.pack(side="right", padx=(8, 0))
 
     subject_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     subject_frame.pack(fill="x", padx=10, pady=(0, 15))

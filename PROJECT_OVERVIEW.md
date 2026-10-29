@@ -89,7 +89,16 @@ Start with Retry until a successful read; starting also rechecks storage before
 creating a checkpoint. Active preparation failures pause for Resume to retry.
 
 The resizable window defaults to 900x620. The left column contains timer controls
-and scrolls in small windows; the right contains history. Subject defaults to `Umum`
+and scrolls in small windows; the right contains history. History starts hidden on
+every launch. Show History / Hide History beside the title toggles the existing
+panel with grid removal, preserving its selected tab and refresh behavior. While
+hidden, its column has zero weight and the timer fills the available width;
+showing it restores the 3:2 column weights. Visibility is not persisted and the
+toggle remains available during running and paused timers. Padding changes use
+`CTkScrollableFrame.grid()` to update its outer wrapper; inherited `grid_configure()`
+would instead re-layout the inner content and break its canvas-width tracking.
+The timer content and cards follow the canvas width through toggles and resizes.
+Subject defaults to `Umum`
 in both modes and is recorded like any other subject.
 The adjacent + button opens an Add Subject input dialog while idle. Successful
 save selects the subject immediately; blank names are rejected and case-insensitive
