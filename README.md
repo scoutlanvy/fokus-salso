@@ -36,6 +36,8 @@ Tanpa progres tersimpan, aplikasi dibuka dalam mode **Pomodoro**, dengan fokus 2
 
 Tekan **Space** saat jendela aplikasi aktif untuk **Pause/Resume** timer Manual, fokus Pomodoro, atau istirahat. Space tidak memulai timer, menghentikan alarm, atau memilih sesi berikutnya. Saat mengetik di kolom input, Space tetap berfungsi sebagai spasi. Menahan tombol hanya mengubah status sekali.
 
+Untuk menambah subjek, klik **+** di samping pilihan **Subject** saat timer belum aktif, masukkan nama, lalu klik **OK**. Subjek langsung terpilih dan tersimpan untuk penggunaan berikutnya. Nama kosong ditolak; nama yang sama (tanpa membedakan huruf besar/kecil) memilih subjek yang sudah ada. Daftar disimpan di `subjects.json` dalam direktori data normal atau percobaan masing-masing, terpisah dari database riwayat.
+
 Saat fokus Pomodoro **paused**, gunakan **Break** untuk memakai seluruh saldo atau **Choose Duration** untuk memilih durasi. Setelah break selesai dan alarm dihentikan, atau setelah **Skip Break**, sisa fokus kembali paused. Klik **Resume** saat siap. Menutup aplikasi selama break tetap menyimpan sisa break dan fokus tersebut.
 
 ## Mencoba Pomodoro dengan cepat

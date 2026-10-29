@@ -7,6 +7,7 @@ from duration_picker import DurationPicker
 from history_panel import HistoryPanel
 from timer_service import TimerService
 from instance_lock import InstanceLock, AlreadyRunningError
+import subject_store
 
 
 def run_app() -> None:
@@ -86,6 +87,7 @@ def _run_app() -> None:
             skip_break_button.grid_remove()
         mode_menu.configure(state=ctk.DISABLED if started else ctk.NORMAL)
         subject_menu.configure(state=ctk.DISABLED if started else ctk.NORMAL)
+        add_subject_button.configure(state=ctk.DISABLED if started else ctk.NORMAL)
         if duration_picker is not None:
             duration_picker.set_enabled(not started and selected_mode.get() == "Manual")
         if selected_mode.get() == "Pomodoro":
@@ -102,7 +104,7 @@ def _run_app() -> None:
         )
         choose_duration_button.configure(state=ctk.NORMAL if available else ctk.DISABLED)
         if timer_service.storage_blocked:
-            for widget in (primary_button, reset_button, mode_menu, subject_menu,
+            for widget in (primary_button, reset_button, mode_menu, subject_menu, add_subject_button,
                            break_all_button, choose_duration_button):
                 widget.configure(state=ctk.DISABLED)
             duration_picker.set_enabled(False)
@@ -321,6 +323,24 @@ def _run_app() -> None:
         dialog.bind("<Return>", lambda event: confirm())
         entries[0].focus_set()
 
+    def add_subject():
+        if timer_service.is_running or timer_service.storage_blocked:
+            return
+        dialog = ctk.CTkInputDialog(text="Subject name:", title="Add Subject")
+        name = dialog.get_input()
+        if name is None:
+            return
+        try:
+            subjects, name = subject_store.add_subject(name)
+        except ValueError as error:
+            messagebox.showerror("Add Subject", str(error), parent=app)
+            return
+        except (OSError, UnicodeError) as error:
+            show_storage_error(f"Could not save subject: {error}")
+            return
+        subject_menu.configure(values=subjects)
+        selected_subject.set(name)
+
     main_frame = ctk.CTkFrame(app, corner_radius=0, fg_color="transparent")
     main_frame.pack(fill="both", expand=True, padx=0, pady=0)
     main_frame.grid_columnconfigure(0, weight=3)
@@ -353,6 +373,12 @@ def _run_app() -> None:
         width=220,
     )
     subject_menu.grid(row=0, column=1, padx=10, pady=8)
+    add_subject_button = ctk.CTkButton(subject_frame, text="+", width=32, command=add_subject)
+    add_subject_button.grid(row=0, column=2, padx=(0, 10), pady=8)
+    try:
+        subject_menu.configure(values=subject_store.load_subjects())
+    except (OSError, ValueError, UnicodeError) as error:
+        app.after(0, lambda error=error: show_storage_error(f"Could not load subjects: {error}"))
 
     mode_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     mode_frame.pack(fill="x", padx=10, pady=(0, 15))

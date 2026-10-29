@@ -87,6 +87,12 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
             app.update()
             subject = next(w for w in widgets() if isinstance(w, ctk.CTkOptionMenu) and "Umum" in w.cget("values"))
             assert subject.get() == "Umum"
+            monkeypatch.setattr(ctk, "CTkInputDialog", lambda **kwargs: SimpleNamespace(get_input=lambda: "  Matematika  "))
+            button("+").invoke()
+            assert subject.get() == "Matematika"
+            assert "Matematika" in subject.cget("values")
+            assert gui.subject_store.load_subjects()[-1] == "Matematika"
+            subject.set("Umum")
             mode = next(w for w in widgets() if isinstance(w, ctk.CTkOptionMenu) and "Pomodoro" in w.cget("values"))
             assert mode.get() == "Pomodoro"
             assert not service.is_running

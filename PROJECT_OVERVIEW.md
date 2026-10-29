@@ -12,6 +12,7 @@ preview usage, and database paths are documented in [README.md](README.md).
 - `session_repository.py`: SQLite persistence and queries.
 - `history_panel.py`: subject summaries and recent sessions.
 - `config.py`: timezone, storage paths, subjects, durations, and theme values.
+- `subject_store.py`: default and custom subject choices, atomically saved to `subjects.json` in the selected data directory without changing the session database.
 - `instance_lock.py`: Windows named mutex keyed by the resolved database path.
 
 ## Storage and Failure Handling
@@ -64,6 +65,10 @@ then applies the saved mode and remaining time. Manual remains selectable when i
 The resizable window defaults to 900x620. The left column contains timer controls
 and scrolls in small windows; the right contains history. Subject defaults to `Umum`
 in both modes and is recorded like any other subject.
+The adjacent + button opens an Add Subject input dialog while idle. Successful
+save selects the subject immediately; blank names are rejected and case-insensitive
+duplicates select the existing spelling. Storage failures leave the selection
+unchanged and show an error. Normal and preview subject lists are isolated.
 
 Manual duration starts at `00:00:00` and Reset restores it. Hours accept 0–99;
 minutes and seconds accept 0–59, with up to two digits per input. Scrolling down
