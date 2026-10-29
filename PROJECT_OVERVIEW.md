@@ -95,6 +95,12 @@ The adjacent + button opens an Add Subject input dialog while idle. Successful
 save selects the subject immediately; blank names are rejected and case-insensitive
 duplicates select the existing spelling. Storage failures leave the selection
 unchanged and show an error. Normal and preview subject lists are isolated.
+The adjacent − button confirms removal of the selected choice, except `Umum`,
+then selects `Umum` and refreshes its target. It is disabled while active or paused
+and when storage is blocked. History and focus progress remain untouched.
+`subjects.json` version 1 stores the complete list as `{"version": 1, "subjects": [...]}`.
+Legacy arrays still merge with defaults; the next successful list change writes
+version 1 atomically so deleted defaults stay removed after restart.
 
 Manual duration starts at `00:00:00` and Reset restores it. Hours accept 0–99;
 minutes and seconds accept 0–59, with up to two digits per input. Scrolling down

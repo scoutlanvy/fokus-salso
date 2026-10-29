@@ -90,6 +90,8 @@ def _run_app() -> None:
         mode_menu.configure(state=ctk.DISABLED if started else ctk.NORMAL)
         subject_menu.configure(state=ctk.DISABLED if started else ctk.NORMAL)
         add_subject_button.configure(state=ctk.DISABLED if started else ctk.NORMAL)
+        delete_subject_button.configure(
+            state=ctk.DISABLED if started or selected_subject.get() == "Umum" else ctk.NORMAL)
         if duration_picker is not None:
             duration_picker.set_enabled(not started and selected_mode.get() == "Manual")
         if selected_mode.get() == "Pomodoro":
@@ -106,7 +108,7 @@ def _run_app() -> None:
         )
         choose_duration_button.configure(state=ctk.NORMAL if available else ctk.DISABLED)
         if timer_service.storage_blocked:
-            for widget in (primary_button, reset_button, mode_menu, subject_menu, add_subject_button,
+            for widget in (primary_button, reset_button, mode_menu, subject_menu, add_subject_button, delete_subject_button,
                            break_all_button, choose_duration_button):
                 widget.configure(state=ctk.DISABLED)
             duration_picker.set_enabled(False)
@@ -371,6 +373,26 @@ def _run_app() -> None:
         subject_menu.configure(values=subjects)
         selected_subject.set(name)
 
+    def delete_subject():
+        if timer_service.is_running or timer_service.storage_blocked:
+            return
+        name = selected_subject.get()
+        if name == "Umum":
+            return
+        if not messagebox.askyesno(
+            "Delete Subject",
+            f'Delete "{name}" from the subject list?\nSession history and focus progress will be kept.',
+            parent=app,
+        ):
+            return
+        try:
+            subjects = subject_store.delete_subject(name)
+        except (OSError, ValueError, UnicodeError) as error:
+            show_storage_error(f"Could not delete subject: {error}")
+            return
+        subject_menu.configure(values=subjects)
+        selected_subject.set("Umum")
+
     main_frame = ctk.CTkFrame(app, corner_radius=0, fg_color="transparent")
     main_frame.pack(fill="both", expand=True, padx=0, pady=0)
     main_frame.grid_columnconfigure(0, weight=3)
@@ -405,6 +427,8 @@ def _run_app() -> None:
     subject_menu.grid(row=0, column=1, padx=10, pady=8)
     add_subject_button = ctk.CTkButton(subject_frame, text="+", width=32, command=add_subject)
     add_subject_button.grid(row=0, column=2, padx=(0, 10), pady=8)
+    delete_subject_button = ctk.CTkButton(subject_frame, text="−", width=32, command=delete_subject)
+    delete_subject_button.grid(row=0, column=3, padx=(0, 10), pady=8)
     try:
         subject_menu.configure(values=subject_store.load_subjects())
     except (OSError, ValueError, UnicodeError) as error:

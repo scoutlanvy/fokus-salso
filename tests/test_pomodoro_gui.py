@@ -8,6 +8,91 @@ import config
 import gui
 import session_repository as repository
 import timer_service
+import subject_store
+
+
+def test_gui_delete_subject(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
+    monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
+    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    repository.reset_active_timer(repository.ActiveTimer(
+        "partial-english", "Pomodoro", "English", "focus", 1500, 900, True))
+    history = repository.get_summary_by_subject()
+    confirmations, errors, services = [], [], []
+    accept = False
+    original_service = gui.TimerService
+
+    def service_factory(*args, **kwargs):
+        service = original_service(*args, **kwargs)
+        services.append(service)
+        return service
+
+    def confirm(*args, **kwargs):
+        confirmations.append(args)
+        return accept
+
+    monkeypatch.setattr(gui, "TimerService", service_factory)
+    monkeypatch.setattr(gui.messagebox, "askyesno", confirm)
+    monkeypatch.setattr(gui.messagebox, "showerror", lambda *args, **kwargs: errors.append(args))
+
+    def inspect(app):
+        def descendants(parent):
+            for child in parent.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        def button(text):
+            return next(w for w in descendants(app)
+                        if isinstance(w, ctk.CTkButton) and w.cget("text") == text)
+
+        nonlocal accept
+        try:
+            app.update()
+            subject = next(w for w in descendants(app) if isinstance(w, ctk.CTkOptionMenu)
+                           and "Umum" in w.cget("values"))
+            delete = button("−")
+            assert delete.cget("state") == "disabled"
+            subject.set("English")
+            assert delete.cget("state") == "normal"
+            delete.invoke()
+            assert subject.get() == "English"
+            assert "English" in confirmations[-1][1]
+            accept = True
+            original_delete = subject_store.delete_subject
+
+            def fail(_):
+                raise OSError("save failed")
+
+            monkeypatch.setattr(subject_store, "delete_subject", fail)
+            delete.invoke()
+            assert errors and subject.get() == "English"
+            assert "English" in subject.cget("values")
+            monkeypatch.setattr(subject_store, "delete_subject", original_delete)
+            delete.invoke()
+            assert subject.get() == "Umum"
+            assert "English" not in subject.cget("values")
+            assert delete.cget("state") == "disabled"
+            assert repository.get_summary_by_subject() == history
+            subject_store.add_subject("English")
+            subject.set("English")
+            assert any(isinstance(w, ctk.CTkLabel)
+                       and w.cget("text") == "Target progress: 00:10:00 / 00:25:00"
+                       for w in descendants(app))
+            button("Start").invoke()
+            assert delete.cget("state") == "disabled"
+            button("Pause").invoke()
+            assert delete.cget("state") == "disabled"
+            button("Reset").invoke()
+            assert delete.cget("state") == "normal"
+            services[0].storage_blocked = True
+            subject.set("Anki")
+            assert delete.cget("state") == "disabled"
+            services[0].storage_blocked = False
+        finally:
+            app.tk.call(app.protocol("WM_DELETE_WINDOW"))
+
+    monkeypatch.setattr(ctk.CTk, "mainloop", inspect)
+    gui.run_app()
 
 
 def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypatch):
