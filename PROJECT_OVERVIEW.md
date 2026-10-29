@@ -99,6 +99,12 @@ The adjacent − button confirms removal of the selected choice, except `Umum`,
 then selects `Umum` and refreshes its target. It is disabled while active or paused
 and when storage is blocked. History and focus progress remain untouched.
 Right-clicking a dropdown item opens a `Hapus` context menu without selecting it.
+The subject list stays visible while the context menu owns focus/mouse capture.
+Escape or cancellation returns focus/capture to the list; a click outside both
+popups closes both. Selecting Hapus closes both before asking for confirmation.
+Focus-loss dismissal is suspended during the context menu. A temporary Windows
+MSGF_MENU hook on the GUI thread distinguishes native outside-click dismissal
+from Escape; the hook is always removed after the native menu returns.
 `Umum` has a disabled action. The menu shares the − button's confirmation and
 deletion flow, including rechecking timer/storage state after confirmation.
 SubjectOptionMenu retains the CTkOptionMenu control but displays subject rows in a

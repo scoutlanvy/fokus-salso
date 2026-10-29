@@ -1,4 +1,5 @@
 import threading
+import ctypes
 import time
 from tkinter import Menu
 from types import SimpleNamespace
@@ -45,12 +46,116 @@ def test_subject_popup_scaled_rows_and_mouse_selection():
         app.update()
         assert context_calls[-1][0] == "Anki"
         assert subject.get() == "English"
+        assert subject.subject_popup is not None
+        subject.close_subject_popup()
         subject.destroy()
 
     try:
         for scale in (1.0, 1.5, 2.0):
             check_scale(scale)
     finally:
+        app.destroy()
+        ctk.set_widget_scaling(1.0)
+
+
+def test_subject_native_context_menu_lifecycle():
+    app = ctk.CTk()
+    app.geometry("700x700+20+20")
+    errors, confirmations = [], []
+    app.report_callback_exception = lambda *args: errors.append(args)
+    menu = Menu(app, tearoff=False)
+    subject = gui.SubjectOptionMenu(app, values=config.SUBJECT_OPTIONS, context_command=lambda *_: None)
+    subject.pack()
+
+    def open_subject():
+        subject._open_dropdown_menu()
+        app.update()
+        return subject.subject_popup
+
+    def delete():
+        subject.close_subject_popup()
+        confirmations.append(subject.subject_popup)
+
+    menu.add_command(label="Hapus", command=delete)
+
+    def native_key(key):
+        # Target only this GUI thread's native menu window, never global input.
+        thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
+        sent = []
+
+        def send():
+            callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+            @callback_type
+            def visit(hwnd, _):
+                name = ctypes.create_unicode_buffer(256)
+                ctypes.windll.user32.GetClassNameW(ctypes.c_void_p(hwnd), name, 256)
+                if name.value == "#32768":
+                    if key in ("outside", "list"):
+                        position = (2000 << 16) | 2000 if key == "outside" else (5 << 16) | (0xffff & -20)
+                        ctypes.windll.user32.PostMessageW(ctypes.c_void_p(hwnd), 0x201, 1, position)
+                        ctypes.windll.user32.PostMessageW(ctypes.c_void_p(hwnd), 0x202, 0, position)
+                        sent.append(True)
+                        return True
+                    if key == 0x0D:
+                        ctypes.windll.user32.PostMessageW(ctypes.c_void_p(hwnd), 0x100, 0x28, 0)
+                        ctypes.windll.user32.PostMessageW(ctypes.c_void_p(hwnd), 0x101, 0x28, 0)
+                    ctypes.windll.user32.PostMessageW(ctypes.c_void_p(hwnd), 0x100, key, 0)
+                    ctypes.windll.user32.PostMessageW(ctypes.c_void_p(hwnd), 0x101, key, 0)
+                    sent.append(True)
+                return True
+
+            deadline = time.monotonic() + 5
+            while not sent and time.monotonic() < deadline:
+                ctypes.windll.user32.EnumThreadWindows(thread_id, visit, 0)
+                time.sleep(0.01)
+
+        worker = threading.Thread(target=send)
+        worker.start()
+        return worker, sent
+
+    try:
+        for scale in (1.0, 1.5, 2.0):
+            ctk.set_widget_scaling(scale)
+            app.update()
+            popup = open_subject()
+            x, y = popup.winfo_rootx() + popup.winfo_width(), popup.winfo_rooty()
+
+            worker, sent = native_key(0x1B)
+            subject.post_context_menu(menu, x, y)
+            worker.join(6)
+            assert sent
+            app.update()
+            assert subject.subject_popup == popup
+            assert subject.context_menu is None
+            assert app.grab_current() == popup
+            assert app.focus_get().winfo_toplevel() == popup
+
+            worker, sent = native_key("list")
+            subject.post_context_menu(menu, x, y)
+            worker.join(6)
+            app.update()
+            assert sent
+            assert subject.subject_popup == popup
+            assert app.grab_current() == popup
+
+            worker, sent = native_key("outside")
+            subject.post_context_menu(menu, x, y)
+            worker.join(6)
+            app.update()
+            assert subject.subject_popup is None
+
+            popup = open_subject()
+            worker, sent = native_key(0x0D)
+            subject.post_context_menu(menu, x, y)
+            worker.join(6)
+            app.update()
+            assert subject.subject_popup is None
+            assert confirmations[-1] is None
+            assert subject.get() == "Umum"
+        assert not errors
+    finally:
+        subject.close_subject_popup()
         app.destroy()
         ctk.set_widget_scaling(1.0)
 
@@ -63,6 +168,7 @@ def test_gui_delete_subject(tmp_path, monkeypatch):
         "partial-english", "Pomodoro", "English", "focus", 1500, 900, True))
     history = repository.get_summary_by_subject()
     confirmations, errors, services = [], [], []
+    controls = []
     accept = False
     original_service = gui.TimerService
 
@@ -72,6 +178,7 @@ def test_gui_delete_subject(tmp_path, monkeypatch):
         return service
 
     def confirm(*args, **kwargs):
+        assert controls[0].subject_popup is None
         confirmations.append(args)
         return accept
 
@@ -94,6 +201,7 @@ def test_gui_delete_subject(tmp_path, monkeypatch):
             app.update()
             subject = next(w for w in descendants(app) if isinstance(w, ctk.CTkOptionMenu)
                            and "Umum" in w.cget("values"))
+            controls.append(subject)
             # Dispatch through Tk bindtags, including CTk's global click-focus handler.
             # Calling _open_dropdown_menu directly misses the real left-click race.
             for surface in (subject._text_label, subject._canvas):
@@ -123,6 +231,7 @@ def test_gui_delete_subject(tmp_path, monkeypatch):
             right_click("English")
             assert subject.get() == "Umum"
             assert posted
+            assert subject.subject_popup is not None
             assert context.entrycget(0, "label") == "Hapus"
             context.invoke(0)
             context.unpost()
