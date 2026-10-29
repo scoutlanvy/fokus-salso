@@ -98,6 +98,18 @@ unchanged and show an error. Normal and preview subject lists are isolated.
 The adjacent − button confirms removal of the selected choice, except `Umum`,
 then selects `Umum` and refreshes its target. It is disabled while active or paused
 and when storage is blocked. History and focus progress remain untouched.
+Right-clicking a dropdown item opens a `Hapus` context menu without selecting it.
+`Umum` has a disabled action. The menu shares the − button's confirmation and
+deletion flow, including rechecking timer/storage state after confirmation.
+SubjectOptionMenu retains the CTkOptionMenu control but displays subject rows in a
+scrollable Tk Toplevel popup, since native Windows menus do not reliably deliver
+per-item right-click events. Rows bind their subject names directly. Escape,
+outside clicks, and focus loss close the popup; the mode dropdown is unchanged.
+Left-click opening is deferred until idle so CTk's global click-focus binding
+finishes before focus moves into the popup, preventing immediate dismissal.
+Popup height uses widget scaling to match the row heights on high-DPI Windows
+displays. The context menu uses the dropdown font/colors and Tk's popup lifecycle
+so mouse selection and dismissal work with the appropriate menu grab.
 `subjects.json` version 1 stores the complete list as `{"version": 1, "subjects": [...]}`.
 Legacy arrays still merge with defaults; the next successful list change writes
 version 1 atomically so deleted defaults stay removed after restart.

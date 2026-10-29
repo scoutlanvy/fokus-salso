@@ -1,6 +1,6 @@
 import customtkinter as ctk
 import queue
-from tkinter import messagebox
+from tkinter import Menu, Toplevel, messagebox
 
 import config
 from duration_picker import DurationPicker
@@ -8,6 +8,90 @@ from history_panel import HistoryPanel
 from timer_service import TimerService
 from instance_lock import InstanceLock, AlreadyRunningError
 import subject_store
+
+
+class SubjectOptionMenu(ctk.CTkOptionMenu):
+    """Use Tk widgets for subject rows so Windows delivers right-click events."""
+
+    def __init__(self, *args, context_command, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.context_command = context_command
+        self.subject_popup = None
+        self.subject_rows = {}
+
+    def close_subject_popup(self):
+        if self.subject_popup is not None:
+            self.subject_popup.grab_release()
+            self.subject_popup.destroy()
+            self.subject_popup = None
+            self.subject_rows = {}
+
+    def _clicked(self, event=None):
+        if self.subject_popup is not None:
+            self.close_subject_popup()
+        elif self.cget("state") != ctk.DISABLED:
+            # CTk's global Button-1 handler focuses the clicked control. Wait for
+            # that handler before moving focus into the popup, or FocusOut closes it.
+            self.after_idle(self._open_dropdown_menu)
+
+    def _open_dropdown_menu(self):
+        if self.cget("state") == ctk.DISABLED:
+            return
+        self.close_subject_popup()
+        popup = self.subject_popup = Toplevel(self)
+        popup.withdraw()
+        popup.overrideredirect(True)
+        popup.transient(self.winfo_toplevel())
+        width = max(self.winfo_width(), 220)
+        height = round(self._apply_widget_scaling(min(300, len(self.cget("values")) * 36 + 12)))
+        x = min(self.winfo_rootx(), self.winfo_screenwidth() - width)
+        y = self.winfo_rooty() + self.winfo_height()
+        if y + height > self.winfo_screenheight():
+            y = max(0, self.winfo_rooty() - height)
+        popup.geometry(f"{width}x{height}+{max(0, x)}+{y}")
+        rows = ctk.CTkScrollableFrame(popup, corner_radius=0)
+        rows.pack(fill="both", expand=True)
+        for name in self.cget("values"):
+            row = ctk.CTkButton(
+                rows, text=name, anchor="w", height=30, fg_color="transparent",
+                command=lambda name=name: self._select_subject(name),
+            )
+            row.pack(fill="x", pady=2)
+            row.bind("<Button-3>", lambda event, name=name: self._context_subject(event, name))
+            self.subject_rows[name] = row
+        popup.bind("<Escape>", lambda event: self.close_subject_popup())
+        popup.bind("<Button-1>", self._outside_subject_popup)
+        popup.bind("<FocusOut>", lambda event: self.after_idle(self._check_popup_focus))
+        popup.deiconify()
+        popup.update_idletasks()
+        popup.grab_set()
+        popup.focus_force()
+
+    def _outside_subject_popup(self, event):
+        popup = self.subject_popup
+        if popup is not None and not (
+            popup.winfo_rootx() <= event.x_root < popup.winfo_rootx() + popup.winfo_width()
+            and popup.winfo_rooty() <= event.y_root < popup.winfo_rooty() + popup.winfo_height()
+        ):
+            self.close_subject_popup()
+            return "break"
+
+    def _check_popup_focus(self):
+        popup = self.subject_popup
+        if popup is not None:
+            focus = self.focus_get()
+            if focus is None or focus.winfo_toplevel() != popup:
+                self.close_subject_popup()
+
+    def _select_subject(self, name):
+        self.close_subject_popup()
+        self._dropdown_callback(name)
+
+    def _context_subject(self, event, name):
+        x, y = event.x_root, event.y_root
+        self.close_subject_popup()
+        self.context_command(name, x, y)
+        return "break"
 
 
 def run_app() -> None:
@@ -373,10 +457,10 @@ def _run_app() -> None:
         subject_menu.configure(values=subjects)
         selected_subject.set(name)
 
-    def delete_subject():
+    def delete_subject(name=None):
         if timer_service.is_running or timer_service.storage_blocked:
             return
-        name = selected_subject.get()
+        name = selected_subject.get() if name is None else name
         if name == "Umum":
             return
         if not messagebox.askyesno(
@@ -385,6 +469,8 @@ def _run_app() -> None:
             parent=app,
         ):
             return
+        if timer_service.is_running or timer_service.storage_blocked:
+            return
         try:
             subjects = subject_store.delete_subject(name)
         except (OSError, ValueError, UnicodeError) as error:
@@ -392,6 +478,31 @@ def _run_app() -> None:
             return
         subject_menu.configure(values=subjects)
         selected_subject.set("Umum")
+
+    def show_subject_context_menu(name, x, y):
+        if timer_service.is_running or timer_service.storage_blocked:
+            return
+
+        def confirm_delete():
+            subject_context_menu.unpost()
+            delete_subject(name)
+
+        subject_context_menu.delete(0, "end")
+        subject_context_menu.add_command(
+            label="Hapus", state="disabled" if name == "Umum" else "normal",
+            command=confirm_delete,
+        )
+        subject_context_menu.configure(
+            font=subject_menu._apply_font_scaling(subject_menu.cget("dropdown_font")),
+            bg=subject_menu._apply_appearance_mode(subject_menu.cget("dropdown_fg_color")),
+            fg=subject_menu._apply_appearance_mode(subject_menu.cget("dropdown_text_color")),
+            activebackground=subject_menu._apply_appearance_mode(subject_menu.cget("dropdown_hover_color")),
+            activeforeground=subject_menu._apply_appearance_mode(subject_menu.cget("dropdown_text_color")),
+        )
+        try:
+            subject_context_menu.tk_popup(x, y)
+        finally:
+            subject_context_menu.grab_release()
 
     main_frame = ctk.CTkFrame(app, corner_radius=0, fg_color="transparent")
     main_frame.pack(fill="both", expand=True, padx=0, pady=0)
@@ -418,13 +529,15 @@ def _run_app() -> None:
     ctk.CTkLabel(subject_frame, text="Subject", anchor="w").grid(
         row=0, column=0, sticky="w", padx=10, pady=8
     )
-    subject_menu = ctk.CTkOptionMenu(
+    subject_menu = SubjectOptionMenu(
         subject_frame,
+        context_command=show_subject_context_menu,
         values=config.SUBJECT_OPTIONS,
         variable=selected_subject,
         width=220,
     )
     subject_menu.grid(row=0, column=1, padx=10, pady=8)
+    subject_context_menu = Menu(app, tearoff=False)
     add_subject_button = ctk.CTkButton(subject_frame, text="+", width=32, command=add_subject)
     add_subject_button.grid(row=0, column=2, padx=(0, 10), pady=8)
     delete_subject_button = ctk.CTkButton(subject_frame, text="−", width=32, command=delete_subject)

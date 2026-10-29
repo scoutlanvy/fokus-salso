@@ -1,5 +1,6 @@
 import threading
 import time
+from tkinter import Menu
 from types import SimpleNamespace
 
 import customtkinter as ctk
@@ -9,6 +10,49 @@ import gui
 import session_repository as repository
 import timer_service
 import subject_store
+
+
+def test_subject_popup_scaled_rows_and_mouse_selection():
+    app = ctk.CTk()
+    app.geometry("700x700+20+20")
+    context_calls = []
+
+    def check_scale(scale):
+        ctk.set_widget_scaling(scale)
+        subject = gui.SubjectOptionMenu(
+            app, values=config.SUBJECT_OPTIONS,
+            context_command=lambda *args: context_calls.append(args))
+        subject.pack()
+        app.update()
+        subject._text_label.event_generate("<Button-1>", x=10, y=10)
+        app.update()
+        popup = subject.subject_popup
+        assert popup is not None
+        # A short list must fit in full at every supported widget scale.
+        for row in subject.subject_rows.values():
+            assert row.winfo_rooty() >= popup.winfo_rooty()
+            assert row.winfo_rooty() + row.winfo_height() <= popup.winfo_rooty() + popup.winfo_height()
+        english = subject.subject_rows["English"]._text_label
+        english.event_generate("<Enter>")
+        english.event_generate("<Button-1>", x=5, y=5)
+        english.event_generate("<ButtonRelease-1>", x=5, y=5)
+        app.update()
+        assert subject.get() == "English"
+        assert subject.subject_popup is None
+        subject._open_dropdown_menu()
+        app.update()
+        subject.subject_rows["Anki"]._text_label.event_generate("<Button-3>", x=5, y=5)
+        app.update()
+        assert context_calls[-1][0] == "Anki"
+        assert subject.get() == "English"
+        subject.destroy()
+
+    try:
+        for scale in (1.0, 1.5, 2.0):
+            check_scale(scale)
+    finally:
+        app.destroy()
+        ctk.set_widget_scaling(1.0)
 
 
 def test_gui_delete_subject(tmp_path, monkeypatch):
@@ -50,8 +94,58 @@ def test_gui_delete_subject(tmp_path, monkeypatch):
             app.update()
             subject = next(w for w in descendants(app) if isinstance(w, ctk.CTkOptionMenu)
                            and "Umum" in w.cget("values"))
+            # Dispatch through Tk bindtags, including CTk's global click-focus handler.
+            # Calling _open_dropdown_menu directly misses the real left-click race.
+            for surface in (subject._text_label, subject._canvas):
+                surface.event_generate("<Button-1>", x=10, y=10)
+                app.update()
+                assert subject.subject_popup is not None
+                assert subject.subject_rows["English"].winfo_viewable()
+                assert subject.subject_rows["English"].winfo_width() > 1
+                assert app.focus_get().winfo_toplevel() == subject.subject_popup
+                subject.close_subject_popup()
             delete = button("−")
             assert delete.cget("state") == "disabled"
+            context = next(w for w in app.winfo_children() if isinstance(w, Menu))
+            # Avoid entering Windows' native menu modal loop in this callback test.
+            posted = []
+            monkeypatch.setattr(context, "tk_popup", lambda x, y: posted.append((x, y)))
+
+            def right_click(name):
+                subject._open_dropdown_menu()
+                app.update()
+                assert subject.subject_popup is not None or subject.cget("state") == "disabled", app.focus_get()
+                if subject.subject_popup is not None:
+                    subject.subject_rows[name]._canvas.event_generate("<Button-3>", x=12, y=10)
+                app.update()
+
+            # A different item is the target; merely opening/cancelling keeps selection.
+            right_click("English")
+            assert subject.get() == "Umum"
+            assert posted
+            assert context.entrycget(0, "label") == "Hapus"
+            context.invoke(0)
+            context.unpost()
+            assert subject.get() == "Umum"
+            assert "English" in confirmations[-1][1]
+            right_click("Umum")
+            assert context.entrycget(0, "state") == "disabled"
+            context.unpost()
+            subject._open_dropdown_menu()
+            app.update()
+            subject.subject_popup.event_generate("<Button-3>", x=0, y=0)
+            assert not context.winfo_ismapped()
+            subject.subject_popup.event_generate("<Escape>")
+            assert subject.subject_popup is None
+            subject._open_dropdown_menu()
+            app.update()
+            subject.subject_popup.event_generate("<Button-1>", x=-5, y=-5)
+            assert subject.subject_popup is None
+            subject._open_dropdown_menu()
+            app.update()
+            app.focus_force()
+            app.update()
+            assert subject.subject_popup is None
             subject.set("English")
             assert delete.cget("state") == "normal"
             delete.invoke()
@@ -64,15 +158,25 @@ def test_gui_delete_subject(tmp_path, monkeypatch):
                 raise OSError("save failed")
 
             monkeypatch.setattr(subject_store, "delete_subject", fail)
-            delete.invoke()
+            right_click("English")
+            context.invoke(0)
+            context.unpost()
             assert errors and subject.get() == "English"
             assert "English" in subject.cget("values")
             monkeypatch.setattr(subject_store, "delete_subject", original_delete)
-            delete.invoke()
+            subject.set("Linux")
+            right_click("English")
+            context.invoke(0)
+            context.unpost()
             assert subject.get() == "Umum"
             assert "English" not in subject.cget("values")
             assert delete.cget("state") == "disabled"
             assert repository.get_summary_by_subject() == history
+            # Left-click command still selects normally after a context action.
+            subject._open_dropdown_menu()
+            app.update()
+            subject.subject_rows["Anki"].invoke()
+            assert subject.get() == "Anki"
             subject_store.add_subject("English")
             subject.set("English")
             assert any(isinstance(w, ctk.CTkLabel)
@@ -80,13 +184,26 @@ def test_gui_delete_subject(tmp_path, monkeypatch):
                        for w in descendants(app))
             button("Start").invoke()
             assert delete.cget("state") == "disabled"
+            posted_before = len(posted)
+            right_click("Anki")
+            assert len(posted) == posted_before
+            assert not context.winfo_ismapped()
+            subject.close_subject_popup()
             button("Pause").invoke()
             assert delete.cget("state") == "disabled"
+            right_click("Anki")
+            assert len(posted) == posted_before
+            assert not context.winfo_ismapped()
+            subject.close_subject_popup()
             button("Reset").invoke()
             assert delete.cget("state") == "normal"
             services[0].storage_blocked = True
             subject.set("Anki")
             assert delete.cget("state") == "disabled"
+            right_click("Anki")
+            assert len(posted) == posted_before
+            assert not context.winfo_ismapped()
+            subject.close_subject_popup()
             services[0].storage_blocked = False
         finally:
             app.tk.call(app.protocol("WM_DELETE_WINDOW"))
