@@ -1,4 +1,4 @@
-﻿# Study Timer — Technical Overview
+# Timer — Technical Overview
 
 Read the sections relevant to the change. Installation, launch instructions,
 preview usage, and database paths are documented in [README.md](README.md).
@@ -77,6 +77,8 @@ The Windows mutex is acquired before database initialization and released on exi
 or process death. Normal and preview paths use different mutexes and databases.
 
 ## Interface and Duration Input
+
+The window title and main heading use Timer; preview windows use Timer - TEST MODE.
 
 Without saved progress, launch defaults to Pomodoro. Mode initialization displays
 the configured focus duration and controls without starting the timer. Recovery

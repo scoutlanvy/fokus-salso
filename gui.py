@@ -203,7 +203,7 @@ def run_app() -> None:
         root = ctk.CTk()
         root.withdraw()
         try:
-            messagebox.showerror("Study Timer", str(error), parent=root)
+            messagebox.showerror(config.APP_TITLE, str(error), parent=root)
         finally:
             root.destroy()
 
@@ -635,7 +635,7 @@ def _run_app() -> None:
 
     header_label = ctk.CTkLabel(
         header_frame,
-        text="⏱️ Study Timer",
+        text="⏱️ Timer",
         font=("Helvetica", 22, "bold"),
     )
     header_label.pack(side="left", expand=True)
