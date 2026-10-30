@@ -201,6 +201,7 @@ def run_app() -> None:
             _run_app()
     except (AlreadyRunningError, OSError) as error:
         root = ctk.CTk()
+        root.iconbitmap(default=str(config.APP_ICON))
         root.withdraw()
         try:
             messagebox.showerror(config.APP_TITLE, str(error), parent=root)
@@ -213,6 +214,7 @@ def _run_app() -> None:
     ctk.set_default_color_theme("blue")
 
     app = ctk.CTk()
+    app.iconbitmap(default=str(config.APP_ICON))
     app.title(config.APP_TITLE)
     app.geometry(config.WINDOW_SIZE)
     app.resizable(config.WINDOW_RESIZABLE, config.WINDOW_RESIZABLE)

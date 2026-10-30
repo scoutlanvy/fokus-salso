@@ -79,6 +79,9 @@ or process death. Normal and preview paths use different mutexes and databases.
 ## Interface and Duration Input
 
 The window title and main heading use Timer; preview windows use Timer - TEST MODE.
+`timer.ico` supplies multiple icon sizes for Windows. `config.APP_ICON` resolves
+it beside the code, and main/error windows set it explicitly before displaying.
+The local and pinned Timer shortcuts also reference this file for their icons.
 
 Without saved progress, launch defaults to Pomodoro. Mode initialization displays
 the configured focus duration and controls without starting the timer. Recovery

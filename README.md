@@ -26,6 +26,11 @@ py -m venv .venv
 
 Klik dua kali `Study Timer.vbs` untuk membuka aplikasi tanpa jendela terminal. Launcher harus tetap berada di folder proyek dan menggunakan Python dari `.venv`.
 
+Pintasan `Timer.lnk` dapat disematkan ke taskbar Windows. Ikon pintasan dan
+jendela memakai `timer.ico`; biarkan file ikon tetap berada di folder proyek.
+Jika pin lama masih menampilkan ikon kosong, lepas pin lalu sematkan kembali
+pintasan `Timer` dari folder proyek.
+
 Atau jalankan dari PowerShell:
 
 ```powershell

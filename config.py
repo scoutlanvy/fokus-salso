@@ -37,6 +37,7 @@ MAX_MINUTES = 59
 MAX_SECONDS = 59
 
 APP_TITLE = "Timer - TEST MODE" if PREVIEW_MODE else "Timer"
+APP_ICON = Path(__file__).resolve().with_name("timer.ico")
 WINDOW_SIZE = "900x620"
 WINDOW_RESIZABLE = True
 
