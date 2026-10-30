@@ -150,7 +150,9 @@ def test_invalid_break_does_not_spend_balance(service, duration):
 
 
 @pytest.mark.parametrize("skip", [False, True])
-def test_paused_focus_break_returns_same_focus(service, fast_clock, skip):
+@pytest.mark.parametrize("scope", ["shared", "per_subject"])
+def test_paused_focus_break_returns_same_focus(service, fast_clock, skip, scope):
+    service.change_focus_scope(scope, "English")
     repository.complete_pomodoro_focus("Umum", 1500)
     service.start_pomodoro("English")
     wait_for(lambda: service.current_phase == "focus")
@@ -176,7 +178,9 @@ def test_paused_focus_break_returns_same_focus(service, fast_clock, skip):
 
 
 @pytest.mark.parametrize("remaining", [0, 2])
-def test_recover_break_preserves_suspended_focus(service, fast_clock, remaining):
+@pytest.mark.parametrize("scope", ["shared", "per_subject"])
+def test_recover_break_preserves_suspended_focus(service, fast_clock, remaining, scope):
+    service.change_focus_scope(scope, "English")
     focus = repository.ActiveTimer("original-focus", "Pomodoro", "English", "focus", 1500, 1038, True)
     saved = repository.ActiveTimer("break", "Pomodoro", "English", "break", 2, remaining, False, focus)
     repository.complete_pomodoro_focus("Umum", 1500)

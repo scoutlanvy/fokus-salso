@@ -11,7 +11,7 @@ import config
 from session_repository import (
     save_session, get_pomodoro_state, complete_pomodoro_focus, consume_break_second,
     ActiveTimer, load_active_timer, save_active_timer, clear_active_timer, reset_active_timer,
-    get_focus_progress,
+    get_focus_progress, get_focus_scope, set_focus_scope,
 )
 
 Callback = Callable[[str], None]
@@ -50,6 +50,8 @@ class TimerService:
         self._restoring = False
         self._focus_break_event = threading.Event()
         self._storage_retry = False
+        self.focus_scope = "shared"
+        self.focus_read_failed = False
         self.storage_blocked = not self._load_balance()
 
     def _checkpoint(self, timer):
@@ -61,20 +63,37 @@ class TimerService:
             self._restoring = False
             return True
         def prepare():
-            duration = (config.POMODORO_FOCUS_SECONDS - get_focus_progress()
+            duration = (config.POMODORO_FOCUS_SECONDS - get_focus_progress(subject)
                         if phase == "focus" else seconds)
             timer = ActiveTimer(str(uuid4()), "Manual" if phase == "manual" else "Pomodoro",
                                 subject, phase, duration, duration, return_to_choice)
             self._checkpoint(timer)
         return self._persist_with_retry(prepare)
 
-    def focus_seconds_remaining(self):
+    def focus_seconds_remaining(self, subject="Umum"):
         """Read the next idle target; callers must not start if reading fails."""
         try:
-            return config.POMODORO_FOCUS_SECONDS - get_focus_progress()
+            remaining = config.POMODORO_FOCUS_SECONDS - get_focus_progress(subject)
+            self.focus_read_failed = False
+            return remaining
         except (OSError, sqlite3.Error) as error:
+            self.focus_read_failed = True
             self._storage_error(error)
             return None
+
+    def can_change_settings(self):
+        return not (self.is_running or self.is_alarm_active or self.storage_blocked
+                    or self.focus_read_failed or self._storage_retry
+                    or (self.timer_thread is not None and self.timer_thread.is_alive()))
+
+    def change_focus_scope(self, scope, subject):
+        """Keep the current UI preference unless the complete save succeeds."""
+        with self._command_lock:
+            if not self.can_change_settings():
+                raise ValueError("Settings can only change while the timer is idle and storage is available.")
+            progress = set_focus_scope(scope, subject)
+            self.focus_scope = scope
+            return config.POMODORO_FOCUS_SECONDS - progress
 
     def focus_target_progress(self):
         """Active progress includes the carried portion and this running segment."""
@@ -159,7 +178,10 @@ class TimerService:
 
     def _load_balance(self) -> bool:
         try:
-            self.break_balance_seconds, self.cycle_position = get_pomodoro_state()
+            balance, position = get_pomodoro_state()
+            scope = get_focus_scope()
+            self.break_balance_seconds, self.cycle_position = balance, position
+            self.focus_scope = scope
             return True
         except (OSError, sqlite3.Error) as error:
             self._storage_error(error)
@@ -435,7 +457,7 @@ class TimerService:
                 phase, seconds, subject = "break", args[2], args[0]
             else:
                 phase, subject = "focus", args[0]
-                seconds = self.focus_seconds_remaining()
+                seconds = self.focus_seconds_remaining(subject)
                 if seconds is None:
                     return False
             progress = ActiveTimer(str(uuid4()), "Pomodoro" if pomodoro else "Manual",

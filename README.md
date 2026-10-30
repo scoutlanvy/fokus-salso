@@ -7,6 +7,7 @@ Aplikasi desktop Windows untuk mencatat waktu belajar dengan timer manual dan Po
 - Timer manual dengan pengaturan jam, menit, dan detik.
 - Pomodoro: fokus 25 menit dengan kredit istirahat 5, 5, 5, lalu 15 menit secara berulang.
 - Saldo istirahat tersimpan dan dapat digunakan sesuai kebutuhan.
+- Settings untuk memilih progres Pomodoro bersama atau terpisah per subjek.
 - Pilihan subjek belajar, ringkasan per subjek, dan 30 sesi terbaru.
 - Pause, Resume, Reset, Skip Break, serta alarm yang berbunyi sampai dihentikan.
 - Tema terang dan gelap.
@@ -49,6 +50,19 @@ Untuk menghapus subjek dari daftar, pilih subjek lalu klik **−** dan konfirmas
 
 Saat fokus Pomodoro **paused**, gunakan **Break** untuk memakai seluruh saldo atau **Choose Duration** untuk memilih durasi. Setelah break selesai dan alarm dihentikan, atau setelah **Skip Break**, sisa fokus kembali paused. Klik **Resume** saat siap. Menutup aplikasi selama break tetap menyimpan sisa break dan fokus tersebut.
 
+## Settings progres Pomodoro
+
+Klik **Settings** di dekat **Show History**, pilih salah satu, lalu klik **Save**:
+
+- **Shared across subjects** (default): semua subjek melanjutkan sisa target yang sama.
+- **Per subject**: setiap subjek memiliki sisa target sendiri. Saat pertama memakai pilihan ini, setiap subjek mulai dari 25 menit.
+
+Kedua pilihan menyimpan progres masing-masing. Misalnya, Bersama tersisa **18:00**; beralih ke Per subject Anki yang belum dipakai menampilkan **25:00**. Jika kembali ke Bersama, sisanya tetap **18:00**. Progres tidak dipindahkan atau digandakan saat mengganti pilihan. Pilihan dan kedua simpanan progres tetap ada setelah aplikasi ditutup. Data progres per subjek dari versi lama tetap diarsipkan dan tidak dimasukkan ke simpanan Per subject yang baru, agar progres yang pernah dibawa ke Bersama tidak dihitung kembali.
+
+Settings hanya dapat diubah saat timer tidak aktif. Saat timer berjalan, paused, break, alarm, atau menunggu **Continue Focus**, selesaikan atau **Reset** timer terlebih dahulu. Jika penyimpanan bermasalah, pulihkan dulu aksesnya. **Cancel**, Escape, atau menutup dialog membatalkan pilihan yang belum disimpan. Jika Save gagal, dialog menampilkan kesalahan dan pilihan sebelumnya tetap dipakai; Save dapat dicoba lagi.
+
+History tetap mencatat waktu per subjek. Saldo break dan urutan hadiah tetap bersama untuk kedua pilihan. Pengaturan ini tidak mengubah durasi Manual. Mode percobaan menyimpan pilihan dan progresnya sendiri.
+
 ## Mencoba Pomodoro dengan cepat
 
 Klik dua kali `Coba Pomodoro.vbs`. Mode ini memakai fokus 10 detik dan kredit istirahat 5, 5, 5, lalu 15 detik. Data percobaan disimpan terpisah. Tutup jendelanya dan buka `Study Timer.vbs` untuk kembali ke mode normal.
@@ -64,13 +78,13 @@ Riwayat, saldo istirahat, posisi siklus Pomodoro, dan progres timer tersimpan se
 
 Progres Manual, fokus Pomodoro, dan istirahat disimpan setiap detik. Jika aplikasi ditutup pada `24:52`, saat dibuka kembali sisa waktunya tetap `24:52` dalam keadaan **Pause**. Tekan **Resume** untuk melanjutkan; waktu selama aplikasi tertutup tidak dihitung. Mode dan subjek ikut dipulihkan dan terkunci selama sesi aktif.
 
-Progres juga dipulihkan dari detik terakhir yang berhasil disimpan jika aplikasi crash atau komputer mati mendadak. **Reset** pada Pomodoro otomatis mencatat waktu fokus yang sudah dijalani dan mengumpulkannya menuju target 25 menit bersama untuk semua subjek. Contohnya, setelah belajar **14:53**, Reset mencatat bagian itu ke riwayat dan timer menampilkan sisa **10:07**, menunggu **Start**. Setelah sisa itu selesai, total fokus mencapai 25 menit, bonus istirahat diberikan sekali, dan target berikutnya kembali **25:00**. Riwayat mencatat **14:53 + 10:07**, tanpa menghitung waktu yang sama dua kali. Reset berulang tanpa belajar tidak mengurangi progres.
+Progres juga dipulihkan dari detik terakhir yang berhasil disimpan jika aplikasi crash atau komputer mati mendadak. **Reset** pada Pomodoro otomatis mencatat waktu fokus yang sudah dijalani dan mengumpulkannya menuju target 25 menit sesuai pilihan di Settings. Contohnya, setelah belajar **14:53**, Reset mencatat bagian itu ke riwayat dan timer menampilkan sisa **10:07**, menunggu **Start**. Setelah sisa itu selesai, total fokus mencapai 25 menit, bonus istirahat diberikan sekali, dan target berikutnya kembali **25:00**. Riwayat mencatat **14:53 + 10:07**, tanpa menghitung waktu yang sama dua kali. Reset berulang tanpa belajar tidak mengurangi progres.
 
-Semua subjek memakai satu progres target: mengganti dari Umum ke Anki tidak mengubah sisa waktu. Contohnya, belajar Umum **7 menit**, lalu Reset dan pindah ke Anki: sisa timer tetap **18 menit**. Menyelesaikan 18 menit di Anki memberikan satu bonus istirahat; riwayat mencatat Umum 7 menit dan Anki 18 menit. Target berikutnya kembali 25 menit. Tidak ada opsi ON/OFF.
+Secara default, **Shared across subjects** memakai satu progres target: mengganti dari Umum ke Anki tidak mengubah sisa waktu. Contohnya, belajar Umum **7 menit**, lalu Reset dan pindah ke Anki: sisa timer tetap **18 menit**. Menyelesaikan 18 menit di Anki memberikan satu bonus istirahat; riwayat mencatat Umum 7 menit dan Anki 18 menit. Target berikutnya kembali 25 menit.
 
-**Target progress** menunjukkan waktu terkumpul bersama ditambah fokus yang sedang berjalan. Akumulasi tetap tersimpan setelah aplikasi ditutup. Waktu paused, aplikasi tertutup, dan break tidak dihitung sebagai fokus. Jika Reset dilakukan saat break dengan fokus tertunda, hanya bagian fokus yang ditambahkan. Reset saat fokus sudah mencapai nol menyelesaikan target dan bonusnya sekali. Saldo istirahat dan urutan bonus 5, 5, 5, lalu 15 menit tetap bersama untuk semua subjek.
+**Target progress** menunjukkan waktu terkumpul pada pilihan yang sedang dipakai ditambah fokus yang sedang berjalan. Akumulasi tetap tersimpan setelah aplikasi ditutup. Waktu paused, aplikasi tertutup, dan break tidak dihitung sebagai fokus. Jika Reset dilakukan saat break dengan fokus tertunda, hanya bagian fokus yang ditambahkan. Reset saat fokus sudah mencapai nol menyelesaikan target dan bonusnya sekali. Saldo istirahat dan urutan bonus 5, 5, 5, lalu 15 menit tetap bersama untuk semua subjek.
 
-Saat pertama memakai versi ini, progres lama **Umum** dilanjutkan sebagai progres bersama. Jika Umum sudah 6:55, semua subjek menampilkan sisa **18:05**. Jika tidak ada progres Umum, target dimulai penuh. Jika ada fokus lama yang masih aktif atau tersimpan selama break, sisa sesi tersebut dipertahankan beserta progres target yang mendasarinya. Migrasi hanya sekali; data progres lama subjek lain tetap tersimpan tetapi tidak digabungkan. Riwayat, saldo break, dan urutan bonus dipertahankan; riwayat lama tidak dihitung ulang.
+Saat pertama beralih dari versi lama ke progres Bersama, progres lama **Umum** dilanjutkan sebagai progres bersama. Jika Umum sudah 6:55, semua subjek menampilkan sisa **18:05**. Jika tidak ada progres Umum, target dimulai penuh. Jika ada fokus lama yang masih aktif atau tersimpan selama break, sisa sesi tersebut dipertahankan beserta progres target yang mendasarinya. Migrasi hanya sekali; data progres lama subjek lain tetap tersimpan tetapi tidak digabungkan. Riwayat, saldo break, dan urutan bonus dipertahankan; riwayat lama tidak dihitung ulang.
 
 Mode percobaan memakai aturan yang sama dengan target 10 detik dan penyimpanan terpisah. Jika sisa target tidak dapat dibaca, **Start** diganti **Retry**; klik untuk membaca ulang sebelum memulai.
 

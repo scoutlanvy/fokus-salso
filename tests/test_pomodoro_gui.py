@@ -606,7 +606,7 @@ def test_gui_subject_accumulation_and_read_retry(tmp_path, monkeypatch):
             assert displayed("00:10:07")
             original_read = timer_service.get_focus_progress
 
-            def fail():
+            def fail(_):
                 raise repository.sqlite3.OperationalError("read failure")
 
             monkeypatch.setattr(timer_service, "get_focus_progress", fail)

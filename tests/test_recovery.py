@@ -36,6 +36,113 @@ def service():
     return TimerService(lambda _: None, lambda _: None, lambda *_, **__: None)
 
 
+def test_settings_keep_independent_targets_and_persist_across_restart():
+    timer = service()
+    assert timer.focus_scope == "shared"
+    repository.reset_active_timer(replace(snapshot(remaining=1080), subject="Umum"))
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("INSERT INTO subject_focus_progress VALUES ('Anki', 900)")
+    assert timer.change_focus_scope("per_subject", "Anki") == 1500
+    assert service().focus_scope == "per_subject"
+    repository.reset_active_timer(replace(snapshot(remaining=1320), subject="Anki"))
+    repository.reset_active_timer(replace(snapshot(remaining=1200), subject="Umum"))
+    assert timer.focus_seconds_remaining("Anki") == 1320
+    assert timer.focus_seconds_remaining("Umum") == 1200
+    assert timer.change_focus_scope("shared", "Anki") == 1080
+    assert timer.focus_seconds_remaining("Umum") == 1080
+    assert timer.change_focus_scope("per_subject", "Anki") == 1320
+    final_segment = replace(snapshot(remaining=0, total=1320), subject="Anki")
+    repository.reset_active_timer(final_segment)
+    repository.reset_active_timer(final_segment)
+    assert timer.focus_seconds_remaining("Anki") == 1500
+    assert timer.focus_seconds_remaining("Umum") == 1200
+    assert repository.get_pomodoro_state() == (300, 1)
+    assert repository.get_summary_by_subject() == [("Anki", 1500, 2), ("Umum", 720, 2)]
+    assert timer.change_focus_scope("shared", "Anki") == 1080
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        assert connection.execute("SELECT * FROM subject_focus_progress").fetchall() == [("Anki", 900)]
+
+
+@pytest.mark.parametrize("phase", ["manual", "focus", "break", "choice"])
+def test_settings_reject_unfinished_checkpoint_even_before_restore(phase):
+    repository.save_active_timer(snapshot(phase, remaining=0 if phase == "choice" else 10))
+    timer = service()
+    with pytest.raises(ValueError):
+        timer.change_focus_scope("per_subject", "English")
+    assert timer.focus_scope == repository.get_focus_scope() == "shared"
+    assert repository.load_active_timer().phase == phase
+
+
+def test_settings_save_and_target_read_failures_are_atomic():
+    timer = service()
+    repository.reset_active_timer(snapshot(remaining=1080))
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("""CREATE TRIGGER fail_settings BEFORE UPDATE ON pomodoro_settings
+            BEGIN SELECT RAISE(ABORT, 'disk full'); END""")
+    with pytest.raises(sqlite3.DatabaseError):
+        timer.change_focus_scope("per_subject", "English")
+    assert timer.focus_scope == repository.get_focus_scope() == "shared"
+    assert timer.focus_seconds_remaining("English") == 1080
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("DROP TRIGGER fail_settings")
+        connection.execute("INSERT INTO per_subject_focus_progress VALUES ('English', 1500)")
+    with pytest.raises(sqlite3.DatabaseError):
+        timer.change_focus_scope("per_subject", "English")
+    assert timer.focus_scope == repository.get_focus_scope() == "shared"
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("UPDATE per_subject_focus_progress SET elapsed_seconds = 100")
+    assert timer.change_focus_scope("per_subject", "English") == 1400
+    assert repository.get_summary_by_subject() == [("English", 420, 1)]
+
+
+@pytest.mark.parametrize("scope", ["shared", "per_subject"])
+def test_settings_scope_survives_short_focus_recovery_and_completion(scope, monkeypatch):
+    timer = service()
+    timer.change_focus_scope(scope, "English")
+    repository.reset_active_timer(snapshot(remaining=607))
+    saved = snapshot(remaining=1, total=607)
+    repository.save_active_timer(saved)
+    monkeypatch.setattr(timer_service, "time", SimpleNamespace(monotonic=lambda: time.monotonic() * 30))
+    try:
+        assert timer.restore_progress() == saved
+        assert not timer.can_change_settings()
+        with pytest.raises(ValueError):
+            timer.change_focus_scope("per_subject" if scope == "shared" else "shared", "English")
+        assert timer.suspend_for_close()
+        timer = service()
+        assert timer.focus_scope == scope
+        assert timer.restore_progress() == saved
+        timer.resume_timer()
+        wait_for(lambda: timer.is_alarm_active)
+        assert not timer.can_change_settings()
+        assert repository.get_summary_by_subject() == [("English", 1500, 2)]
+        assert repository.get_focus_progress("English") == 0
+        assert repository.get_pomodoro_state() == (300, 1)
+        timer.stop_alarm()
+        wait_for(lambda: timer.current_phase == "choice")
+        assert not timer.can_change_settings()
+    finally:
+        timer.reset_timer()
+
+
+def test_settings_preview_isolation(tmp_path, monkeypatch):
+    timer = service()
+    timer.change_focus_scope("per_subject", "English")
+    repository.reset_active_timer(snapshot(remaining=1080))
+    normal_path = config.DATABASE_PATH
+    monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "preview.sqlite3")
+    monkeypatch.setattr(config, "POMODORO_FOCUS_SECONDS", 10)
+    preview = service()
+    assert preview.focus_scope == "shared"
+    repository.reset_active_timer(snapshot(remaining=6, total=10))
+    assert preview.change_focus_scope("per_subject", "English") == 10
+    assert preview.change_focus_scope("shared", "English") == 6
+    monkeypatch.setattr(config, "DATABASE_PATH", normal_path)
+    monkeypatch.setattr(config, "POMODORO_FOCUS_SECONDS", 1500)
+    assert service().focus_scope == "per_subject"
+    assert repository.get_focus_progress("English") == 420
+
+
 def wait_for(predicate):
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
@@ -555,7 +662,9 @@ def test_accumulated_short_segment_recovers_without_counting_twice():
         reopened.suspend_for_close()
 
 
-def test_reset_at_zero_awards_target_once_and_rolls_back_on_failure():
+@pytest.mark.parametrize("scope", ["shared", "per_subject"])
+def test_reset_at_zero_awards_target_once_and_rolls_back_on_failure(scope):
+    repository.set_focus_scope(scope, "English")
     repository.reset_active_timer(snapshot("focus", 607))
     segment = snapshot("focus", 0, 607)
     repository.save_active_timer(segment)
@@ -564,7 +673,7 @@ def test_reset_at_zero_awards_target_once_and_rolls_back_on_failure():
             BEGIN SELECT RAISE(ABORT, 'failure'); END""")
     with pytest.raises(sqlite3.DatabaseError):
         repository.reset_active_timer(segment)
-    assert repository.get_focus_progress() == 893
+    assert repository.get_focus_progress("English") == 893
     assert repository.get_pomodoro_state() == (0, 0)
     assert repository.get_summary_by_subject() == [("English", 893, 1)]
     assert repository.load_active_timer() == segment
@@ -572,7 +681,7 @@ def test_reset_at_zero_awards_target_once_and_rolls_back_on_failure():
         connection.execute("DROP TRIGGER fail_reset")
     assert repository.reset_active_timer(segment) == (300, 1)
     assert repository.reset_active_timer(segment) == (300, 1)
-    assert repository.get_focus_progress() == 0
+    assert repository.get_focus_progress("English") == 0
     assert repository.get_summary_by_subject() == [("English", 1500, 2)]
 
 
@@ -580,7 +689,7 @@ def test_focus_read_failure_prevents_start_and_can_retry(monkeypatch):
     timer = service()
     original = timer_service.get_focus_progress
 
-    def fail():
+    def fail(_):
         raise sqlite3.OperationalError("cannot read progress")
 
     monkeypatch.setattr(timer_service, "get_focus_progress", fail)
@@ -680,6 +789,121 @@ config.DATABASE_PATH = config.DATA_DIRECTORY / 'sessions.sqlite3'
     return subprocess.Popen([sys.executable, "-u", "-c", prelude + script],
                             cwd=Path(__file__).resolve().parents[1], env=environment,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+
+def test_gui_settings_save_cancel_failure_and_active_lock(tmp_path):
+    script = """
+import sqlite3
+import customtkinter as ctk
+import gui
+import timer_service
+import session_repository as repo
+
+repo.reset_active_timer(repo.ActiveTimer('shared-seven', 'Pomodoro', 'Umum', 'focus', 1500, 1080))
+services = []
+original_service = gui.TimerService
+def factory(*args, **kwargs):
+    instance = original_service(*args, **kwargs)
+    services.append(instance)
+    return instance
+gui.TimerService = factory
+gui.messagebox.showerror = lambda *a, **kw: None
+timer_service.winsound.PlaySound = lambda *a: None
+
+def inspect(app):
+    def descendants(parent):
+        for child in parent.winfo_children():
+            yield child
+            yield from descendants(child)
+    def button(text, parent=None):
+        return next(w for w in descendants(parent or app)
+                    if isinstance(w, ctk.CTkButton) and w.cget('text') == text)
+    def displayed(value):
+        return any(isinstance(w, ctk.CTkLabel) and str(w.cget('textvariable'))
+                   and app.getvar(str(w.cget('textvariable'))) == value for w in descendants(app))
+    def pump(predicate):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            app.update()
+            if predicate():
+                return
+            time.sleep(0.01)
+        raise AssertionError('Timed out waiting for GUI')
+    def open_settings(scope):
+        button('Settings').invoke()
+        app.update()
+        dialog = next(w for w in app.winfo_children() if isinstance(w, ctk.CTkToplevel))
+        radio = next(w for w in descendants(dialog)
+                     if isinstance(w, ctk.CTkRadioButton) and w.cget('value') == scope)
+        radio.invoke()
+        return dialog
+    try:
+        app.update()
+        service = services[0]
+        subject = next(w for w in descendants(app)
+                       if isinstance(w, gui.SubjectOptionMenu))
+        assert displayed('00:18:00')
+        dialog = open_settings('per_subject')
+        button('Cancel', dialog).invoke()
+        assert repo.get_focus_scope() == 'shared'
+        assert displayed('00:18:00')
+        dialog = open_settings('per_subject')
+        button('Save', dialog).invoke()
+        assert not dialog.winfo_exists()
+        assert displayed('00:25:00')
+        subject.set('Anki')
+        repo.reset_active_timer(repo.ActiveTimer('anki-two', 'Pomodoro', 'Anki', 'focus', 1500, 1380))
+        subject.set('Anki')
+        assert displayed('00:23:00')
+        dialog = open_settings('shared')
+        button('Save', dialog).invoke()
+        assert displayed('00:18:00')
+        dialog = open_settings('per_subject')
+        original_save = timer_service.set_focus_scope
+        def fail(*args):
+            raise sqlite3.OperationalError('disk full')
+        timer_service.set_focus_scope = fail
+        button('Save', dialog).invoke()
+        assert dialog.winfo_exists()
+        assert repo.get_focus_scope() == service.focus_scope == 'shared'
+        assert displayed('00:18:00')
+        assert any(isinstance(w, ctk.CTkLabel) and 'disk full' in w.cget('text')
+                   for w in descendants(dialog))
+        timer_service.set_focus_scope = original_save
+        button('Save', dialog).invoke()
+        assert displayed('00:23:00')
+        assert any(isinstance(w, ctk.CTkLabel) and 'Separate target for each subject.' in w.cget('text')
+                   for w in descendants(app))
+        reopened = original_service(lambda _: None, lambda _: None, lambda *a: None)
+        assert reopened.focus_scope == 'per_subject'
+        assert reopened.focus_seconds_remaining('Anki') == 1380
+        button('Start').invoke()
+        pump(lambda: service.current_phase == 'focus' and button('Settings').cget('state') == 'disabled')
+        button('Pause').invoke()
+        pump(lambda: any(isinstance(w, ctk.CTkButton) and w.cget('text') == 'Resume'
+                         for w in descendants(app)))
+        assert button('Settings').cget('state') == 'disabled'
+        button('Reset').invoke()
+        assert button('Settings').cget('state') == 'normal'
+        service.storage_blocked = True
+        subject.set('Umum')
+        assert button('Settings').cget('state') == 'disabled'
+        service.storage_blocked = False
+        original_read = timer_service.get_focus_progress
+        timer_service.get_focus_progress = fail
+        subject.set('Umum')
+        assert button('Settings').cget('state') == 'disabled'
+        timer_service.get_focus_progress = original_read
+        button('Retry').invoke()
+        assert button('Settings').cget('state') == 'normal'
+    finally:
+        app.tk.call(app.protocol('WM_DELETE_WINDOW'))
+ctk.CTk.mainloop = inspect
+gui.run_app()
+"""
+    process = child_process(script, tmp_path)
+    stdout, stderr = process.communicate(timeout=20)
+    assert process.returncode == 0, stdout + stderr
 
 
 def test_running_process_crash_restores_last_durable_second(tmp_path):

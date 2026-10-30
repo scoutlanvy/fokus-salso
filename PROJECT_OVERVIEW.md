@@ -56,8 +56,8 @@ minus remaining whole seconds; paused/offline time is excluded. A break with a
 suspended focus records only that focus's elapsed duration. Zero elapsed time,
 Manual progress, breaks without a suspended focus, and already completed sessions
 add no history. The focus UUID completion marker prevents duplicate records on
-retry. Partial sessions count toward history summaries and the shared next
-focus target. They award no break credit until that target is complete. Reset at
+retry. Partial sessions count toward history summaries and the next focus
+target in the selected progress scope. They award no break credit until that target is complete. Reset at
 zero remaining finalizes the target and its reward once, including a pending
 completion transaction. Manual reset behavior is unchanged.
 
@@ -71,15 +71,28 @@ share the transaction and are retried on failure. Legacy `subject_focus_progress
 rows, history, break balance, and cycle position remain untouched. Old subject
 rows are no longer read after migration, and history is not reinterpreted.
 
-Reset adds only the new segment's elapsed seconds to shared progress in the same
+Reset adds only the new segment's elapsed seconds to the selected scope in the same
 transaction as subject-specific history, UUID marker, and checkpoint removal.
 The next segment lasts `POMODORO_FOCUS_SECONDS - accumulated_seconds`; its
 `active_timer.total_seconds` stores this shortened duration. Completion saves only
-the final segment under its subject, clears shared accumulation, awards the break
+the final segment under its subject, clears that target's accumulation, awards the break
 reward, advances the cycle, and checkpoints choice atomically. Earlier segments
-never count twice. Repository `get_focus_progress()` and service
-`focus_seconds_remaining()` take no subject argument. Normal and preview data
-remain isolated.
+never count twice. Repository `get_focus_progress(subject="Umum")` and service
+`focus_seconds_remaining(subject="Umum")` read the target using the persisted scope.
+Normal and preview data remain isolated.
+
+`pomodoro_settings` stores one `focus_scope` (`shared` by default or `per_subject`).
+The new `per_subject_focus_progress` table starts empty; it never imports archived
+`subject_focus_progress` rows, which may already have contributed to shared progress.
+Changing scope does not copy, clear, or merge progress. Each scope resumes its own
+saved target. Break balance and reward-cycle position stay shared.
+`get_focus_scope()` reads the preference; `set_focus_scope(scope, subject)` saves it
+and validates/returns destination progress in one transaction. It rejects unfinished
+checkpoints; finished `done` checkpoints are safe. Save or destination-read failure
+rolls back the preference. The service also serializes changes under its command
+lock and rejects running timers, live workers, alarms, retries, or blocked storage.
+The preference therefore stays fixed for active and suspended focus checkpoints,
+including recovery after restart, without changing their existing schema.
 
 Close freezes progress under the command lock, saves it, then stops and joins the
 worker. A write failure keeps the window open; countdowns stay paused. A recovery
@@ -97,14 +110,24 @@ The local and pinned Timer shortcuts also reference this file for their icons.
 Without saved progress, launch defaults to Pomodoro. Mode initialization displays
 the configured focus duration and controls without starting the timer. Recovery
 then applies the saved mode and remaining time. Idle Pomodoro displays the
-shared remaining target and waits for Start. Manual remains selectable when idle.
+selected scope's remaining target and waits for Start. Manual remains selectable when idle.
 The Target progress label combines recorded accumulation with the active segment's
 elapsed seconds, including a suspended focus during its break. The info text identifies
-the target as shared across subjects. Changing subject preserves the remaining
-target. Subject changes,
-Reset, and mode changes refresh the target. Failed idle progress reads replace
+the target as shared or separate per subject. Changing subject preserves the shared
+target or loads that subject's own target. Subject changes, Reset, and mode changes
+refresh the target. Failed idle progress reads replace
 Start with Retry until a successful read; starting also rechecks storage before
 creating a checkpoint. Active preparation failures pause for Resume to retry.
+
+Settings beside Show History opens a modal dialog with Shared across subjects and
+Per subject radio choices, explanatory text, Save, and Cancel. The dialog uses the
+saved preference; Cancel/Escape/window-close discard only its pending selection.
+Save refreshes the info text and, in Pomodoro, countdown and Target progress from
+the transaction's returned value, avoiding a second read after commit. Failure
+keeps the dialog open with an error and preserves the main display/preference.
+Settings is disabled during all active phases (including pause, alarm and choice),
+storage blocks, and idle target-read failures. A successful Retry re-enables it.
+Manual duration is unaffected by changing this Pomodoro preference.
 
 The resizable window defaults to 900x620. The left column contains timer controls
 and scrolls in small windows; the right contains history. History starts hidden on
@@ -180,8 +203,8 @@ widget updates and error dialogs run on the UI thread.
 
 Durations are configured in `config.py`; normal focus is 25 minutes with rewards
 of 5, 5, 5, then 15 minutes, repeating indefinitely. Balance and cycle position are
-shared across subjects and survive Reset and restarts. Focus accumulation also
-spans subjects; completed targets award the next shared reward. History records
+shared across subjects and survive Reset and restarts. Focus accumulation follows
+the Settings choice; completed targets in either scope award the next shared reward. History records
 each segment under the subject used for that segment. Manual sessions never change the balance or focus accumulation.
 
 Break uses the entire balance. Choose Duration accepts a positive duration no

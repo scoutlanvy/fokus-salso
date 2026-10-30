@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import queue
+import sqlite3
 import sys
 from contextlib import contextmanager
 from tkinter import Menu, Toplevel, messagebox
@@ -231,6 +232,8 @@ def _run_app() -> None:
     closing = False
     ui_events = queue.Queue()
     duration_dialog = None
+    settings_dialog = None
+    settings_controls = []
 
     def set_countdown(value: str) -> None:
         if closing:
@@ -301,8 +304,13 @@ def _run_app() -> None:
             duration_picker.set_enabled(False)
         else:
             refresh_focus_target()
+        settings_state = ctk.NORMAL if timer_service.can_change_settings() else ctk.DISABLED
+        settings_button.configure(state=settings_state)
+        if settings_dialog is not None and settings_dialog.winfo_exists():
+            for widget in settings_controls:
+                widget.configure(state=settings_state)
 
-    def refresh_focus_target(update_idle_timer=True):
+    def refresh_focus_target(update_idle_timer=True, idle_remaining=None):
         if selected_mode.get() != "Pomodoro":
             target_progress_label.pack_forget()
             return
@@ -312,7 +320,8 @@ def _run_app() -> None:
             progress = timer_service.focus_target_progress()
             progress = 0 if progress is None else progress
         elif update_idle_timer:
-            remaining = timer_service.focus_seconds_remaining()
+            remaining = (timer_service.focus_seconds_remaining(selected_subject.get())
+                         if idle_remaining is None else idle_remaining)
             if remaining is None:
                 target_progress_label.configure(text="Target progress unavailable")
                 countdown_var.set("--:--:--")
@@ -325,6 +334,74 @@ def _run_app() -> None:
             return
         target_progress_label.configure(
             text=f"Target progress: {timer_service.format_hms(progress)} / {timer_service.format_hms(target)}")
+
+    def pomodoro_description():
+        scope_text = ("Shared target across subjects." if timer_service.focus_scope == "shared"
+                      else "Separate target for each subject.")
+        if config.PREVIEW_MODE:
+            return ("TEST MODE: Focus 10 sec. Save 5 sec break; 15 sec every 4th focus.\n"
+                    f"{scope_text} Test data is separate.")
+        return (f"Focus {config.POMODORO_FOCUS_MINUTES} min. Save "
+                f"{config.POMODORO_SHORT_BREAK_MINUTES} min break; "
+                f"{config.POMODORO_LONG_BREAK_MINUTES} min every {config.POMODORO_TOTAL_SESSIONS}th focus.\n"
+                f"{scope_text} After the alarm, continue or take a break.")
+
+    def open_settings():
+        nonlocal settings_dialog
+        if not timer_service.can_change_settings():
+            return
+        if settings_dialog is not None and settings_dialog.winfo_exists():
+            settings_dialog.focus()
+            return
+        settings_dialog = dialog = ctk.CTkToplevel(app)
+        dialog.title("Settings")
+        dialog.geometry("460x370")
+        dialog.resizable(False, False)
+        dialog.transient(app)
+        dialog.grab_set()
+        selected_scope = ctk.StringVar(master=dialog, value=timer_service.focus_scope)
+        settings_controls.clear()
+        ctk.CTkLabel(dialog, text="Pomodoro progress", font=("Helvetica", 18, "bold")).pack(
+            anchor="w", padx=20, pady=(18, 12))
+        for value, title, explanation in (
+            ("shared", "Shared across subjects", "Keep the same remaining target when you change subjects."),
+            ("per_subject", "Per subject", "Each subject keeps its own remaining target."),
+        ):
+            radio = ctk.CTkRadioButton(dialog, text=title, variable=selected_scope, value=value)
+            radio.pack(anchor="w", padx=20, pady=(8, 2))
+            settings_controls.append(radio)
+            ctk.CTkLabel(dialog, text=explanation, wraplength=410, justify="left").pack(
+                anchor="w", padx=20, pady=(0, 4))
+        ctk.CTkLabel(dialog, text="Both options keep their progress separately.\nSwitching back resumes the progress saved there.",
+                     wraplength=410, justify="left").pack(anchor="w", padx=20, pady=(8, 0))
+        error_label = ctk.CTkLabel(dialog, text="", text_color=("#b00020", "#ff8888"), wraplength=410)
+        error_label.pack(fill="x", padx=20, pady=4)
+
+        def cancel():
+            nonlocal settings_dialog
+            dialog.destroy()
+            settings_dialog = None
+            settings_controls.clear()
+
+        def save():
+            try:
+                remaining = timer_service.change_focus_scope(selected_scope.get(), selected_subject.get())
+            except (OSError, sqlite3.Error, ValueError) as error:
+                error_label.configure(text=f"Could not save Settings: {error}")
+                return
+            pomodoro_info.configure(text=pomodoro_description())
+            refresh_focus_target(idle_remaining=remaining)
+            cancel()
+
+        actions = ctk.CTkFrame(dialog, fg_color="transparent")
+        actions.pack(side="bottom", fill="x", padx=20, pady=(8, 18))
+        save_button = ctk.CTkButton(actions, text="Save", command=save)
+        save_button.pack(side="right", padx=(8, 0))
+        settings_controls.append(save_button)
+        ctk.CTkButton(actions, text="Cancel", command=cancel).pack(side="right")
+        dialog.protocol("WM_DELETE_WINDOW", cancel)
+        dialog.bind("<Escape>", lambda event: cancel())
+        dialog.bind("<Return>", lambda event: save())
 
     def show_storage_error(message: str) -> None:
         if closing:
@@ -645,6 +722,8 @@ def _run_app() -> None:
         header_frame, text="Show History", width=110, command=toggle_history,
     )
     history_toggle.pack(side="right", padx=(8, 0))
+    settings_button = ctk.CTkButton(header_frame, text="Settings", width=90, command=open_settings)
+    settings_button.pack(side="right", padx=(8, 0))
 
     subject_frame = ctk.CTkFrame(left_frame, corner_radius=12)
     subject_frame.pack(fill="x", padx=10, pady=(0, 15))
@@ -695,15 +774,7 @@ def _run_app() -> None:
 
     pomodoro_info = ctk.CTkLabel(
         input_frame,
-        text=(
-            "TEST MODE: Focus 10 sec. Save 5 sec break; 15 sec every 4th focus.\n"
-            "Shared target across subjects. Test data is separate."
-            if config.PREVIEW_MODE else
-            f"Focus {config.POMODORO_FOCUS_MINUTES} min. Save "
-            f"{config.POMODORO_SHORT_BREAK_MINUTES} min break; "
-            f"{config.POMODORO_LONG_BREAK_MINUTES} min every {config.POMODORO_TOTAL_SESSIONS}th focus.\n"
-            "Shared target across subjects. After the alarm, continue or take a break."
-        ),
+        text=pomodoro_description(),
         font=("Helvetica", 12),
         wraplength=370,
     )
