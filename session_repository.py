@@ -60,6 +60,36 @@ def _write_active_timer(connection, timer):
          json.dumps(asdict(timer.suspended_focus)) if timer.suspended_focus else None))
 
 
+def _migrate_shared_focus(connection):
+    connection.execute("""CREATE TABLE IF NOT EXISTS shared_focus_progress (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        elapsed_seconds INTEGER NOT NULL CHECK (elapsed_seconds >= 0),
+        migration_version INTEGER NOT NULL CHECK (migration_version = 1)
+    )""")
+    if connection.execute("SELECT 1 FROM shared_focus_progress WHERE id = 1").fetchone():
+        return
+    row = connection.execute(
+        "SELECT elapsed_seconds FROM subject_focus_progress WHERE subject = 'Umum'"
+    ).fetchone()
+    seconds = row[0] if row else 0
+    active = connection.execute("""SELECT mode, phase, total_seconds, suspended_focus
+        FROM active_timer WHERE id = 1""").fetchone()
+    if active and active[0] == "Pomodoro":
+        if active[1] == "focus":
+            seconds = config.POMODORO_FOCUS_SECONDS - active[2]
+        elif active[1] == "break" and active[3]:
+            try:
+                focus = ActiveTimer(**json.loads(active[3]))
+                seconds = config.POMODORO_FOCUS_SECONDS - focus.total_seconds
+            except (TypeError, ValueError) as error:
+                raise sqlite3.DatabaseError("Invalid suspended focus") from error
+        elif active[1] == "choice":
+            seconds = 0
+    if type(seconds) is not int or not 0 <= seconds < config.POMODORO_FOCUS_SECONDS:
+        raise sqlite3.DatabaseError("Invalid accumulated focus progress")
+    connection.execute("INSERT INTO shared_focus_progress VALUES (1, ?, 1)", (seconds,))
+
+
 def load_active_timer():
     with _pomodoro_transaction() as connection:
         row = connection.execute("""SELECT session_id, mode, subject, phase,
@@ -116,12 +146,10 @@ def reset_active_timer(timer):
                     (focus.subject, elapsed, datetime.now(ZoneInfo(config.TIMEZONE)).isoformat()),
                 )
                 if focus.remaining_seconds == 0:
-                    _award_focus(connection, focus.subject)
+                    _award_focus(connection)
                 else:
-                    connection.execute("""INSERT INTO subject_focus_progress (subject, elapsed_seconds)
-                        VALUES (?, ?) ON CONFLICT(subject) DO UPDATE SET
-                        elapsed_seconds = elapsed_seconds + excluded.elapsed_seconds""",
-                        (focus.subject, elapsed))
+                    connection.execute("""UPDATE shared_focus_progress
+                        SET elapsed_seconds = elapsed_seconds + ? WHERE id = 1""", (elapsed,))
         connection.execute("DELETE FROM active_timer")
         return connection.execute(
             "SELECT balance_seconds, cycle_position FROM pomodoro_state WHERE id = 1"
@@ -168,6 +196,7 @@ def _pomodoro_transaction():
             )""")
             _create_progress_tables(connection)
             _migrate_active_timer(connection)
+            _migrate_shared_focus(connection)
             yield connection
 
 
@@ -179,11 +208,11 @@ def get_pomodoro_state() -> Tuple[int, int]:
         ).fetchone()
 
 
-def get_focus_progress(subject: str) -> int:
-    """Return already recorded seconds toward this subject's next focus target."""
+def get_focus_progress() -> int:
+    """Return already recorded seconds toward the shared focus target."""
     with _pomodoro_transaction() as connection:
         row = connection.execute(
-            "SELECT elapsed_seconds FROM subject_focus_progress WHERE subject = ?", (subject,)
+            "SELECT elapsed_seconds FROM shared_focus_progress WHERE id = 1"
         ).fetchone()
         seconds = row[0] if row else 0
         if not 0 <= seconds < config.POMODORO_FOCUS_SECONDS:
@@ -191,7 +220,7 @@ def get_focus_progress(subject: str) -> int:
         return seconds
 
 
-def _award_focus(connection, subject):
+def _award_focus(connection):
     balance, position = connection.execute(
         "SELECT balance_seconds, cycle_position FROM pomodoro_state WHERE id = 1"
     ).fetchone()
@@ -203,7 +232,7 @@ def _award_focus(connection, subject):
         "UPDATE pomodoro_state SET balance_seconds = ?, cycle_position = ? WHERE id = 1",
         (balance, position),
     )
-    connection.execute("DELETE FROM subject_focus_progress WHERE subject = ?", (subject,))
+    connection.execute("UPDATE shared_focus_progress SET elapsed_seconds = 0 WHERE id = 1")
     return balance, position
 
 
@@ -220,7 +249,7 @@ def complete_pomodoro_focus(subject: str, total_seconds: int, timer=None) -> Tup
             "INSERT INTO study_sessions (subject, duration_seconds, recorded_at) VALUES (?, ?, ?)",
             (subject, total_seconds, recorded_at),
         )
-        balance, position = _award_focus(connection, subject)
+        balance, position = _award_focus(connection)
         if timer is not None:
             _write_active_timer(connection, replace(timer, phase="choice", remaining_seconds=0))
         return balance, position

@@ -312,7 +312,7 @@ def _run_app() -> None:
             progress = timer_service.focus_target_progress()
             progress = 0 if progress is None else progress
         elif update_idle_timer:
-            remaining = timer_service.focus_seconds_remaining(selected_subject.get())
+            remaining = timer_service.focus_seconds_remaining()
             if remaining is None:
                 target_progress_label.configure(text="Target progress unavailable")
                 countdown_var.set("--:--:--")
@@ -697,12 +697,12 @@ def _run_app() -> None:
         input_frame,
         text=(
             "TEST MODE: Focus 10 sec. Save 5 sec break; 15 sec every 4th focus.\n"
-            "Test balance and history are separate."
+            "Shared target across subjects. Test data is separate."
             if config.PREVIEW_MODE else
             f"Focus {config.POMODORO_FOCUS_MINUTES} min. Save "
             f"{config.POMODORO_SHORT_BREAK_MINUTES} min break; "
             f"{config.POMODORO_LONG_BREAK_MINUTES} min every {config.POMODORO_TOTAL_SESSIONS}th focus.\n"
-            "After the alarm, choose to continue or take a break."
+            "Shared target across subjects. After the alarm, continue or take a break."
         ),
         font=("Helvetica", 12),
         wraplength=370,

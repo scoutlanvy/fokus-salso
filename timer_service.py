@@ -61,17 +61,17 @@ class TimerService:
             self._restoring = False
             return True
         def prepare():
-            duration = (config.POMODORO_FOCUS_SECONDS - get_focus_progress(subject)
+            duration = (config.POMODORO_FOCUS_SECONDS - get_focus_progress()
                         if phase == "focus" else seconds)
             timer = ActiveTimer(str(uuid4()), "Manual" if phase == "manual" else "Pomodoro",
                                 subject, phase, duration, duration, return_to_choice)
             self._checkpoint(timer)
         return self._persist_with_retry(prepare)
 
-    def focus_seconds_remaining(self, subject):
+    def focus_seconds_remaining(self):
         """Read the next idle target; callers must not start if reading fails."""
         try:
-            return config.POMODORO_FOCUS_SECONDS - get_focus_progress(subject)
+            return config.POMODORO_FOCUS_SECONDS - get_focus_progress()
         except (OSError, sqlite3.Error) as error:
             self._storage_error(error)
             return None
@@ -435,7 +435,7 @@ class TimerService:
                 phase, seconds, subject = "break", args[2], args[0]
             else:
                 phase, subject = "focus", args[0]
-                seconds = self.focus_seconds_remaining(subject)
+                seconds = self.focus_seconds_remaining()
                 if seconds is None:
                     return False
             progress = ActiveTimer(str(uuid4()), "Pomodoro" if pomodoro else "Manual",

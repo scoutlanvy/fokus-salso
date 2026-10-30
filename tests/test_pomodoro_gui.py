@@ -595,7 +595,7 @@ def test_gui_subject_accumulation_and_read_retry(tmp_path, monkeypatch):
             button("Reset").invoke()
             assert displayed("00:10:07")
             subject.set("English")
-            assert displayed("00:25:00")
+            assert displayed("00:10:07")
             subject.set("Umum")
             assert displayed("00:10:07")
             mode = next(w for w in descendants(app) if isinstance(w, ctk.CTkOptionMenu)
@@ -606,7 +606,7 @@ def test_gui_subject_accumulation_and_read_retry(tmp_path, monkeypatch):
             assert displayed("00:10:07")
             original_read = timer_service.get_focus_progress
 
-            def fail(_):
+            def fail():
                 raise repository.sqlite3.OperationalError("read failure")
 
             monkeypatch.setattr(timer_service, "get_focus_progress", fail)
@@ -617,7 +617,7 @@ def test_gui_subject_accumulation_and_read_retry(tmp_path, monkeypatch):
             monkeypatch.setattr(timer_service, "get_focus_progress", original_read)
             button("Retry").invoke()
             assert button("Start").cget("state") == "normal"
-            assert displayed("00:25:00")
+            assert displayed("00:10:07")
             subject.set("Umum")
             assert displayed("00:10:07")
             assert repository.get_summary_by_subject() == [("Umum", 893, 1)]

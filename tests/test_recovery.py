@@ -272,7 +272,7 @@ def inspect(app):
                        for w in descendants(app))
             subject.set('Umum')
             assert any(isinstance(w, ctk.CTkLabel) and str(w.cget('textvariable'))
-                       and app.getvar(str(w.cget('textvariable'))) == '00:25:00'
+                       and app.getvar(str(w.cget('textvariable'))) == '00:24:52'
                        for w in descendants(app))
             subject.set('English')
     finally:
@@ -404,33 +404,108 @@ def test_legacy_database_gains_progress_tables_without_changing_history():
     assert repository.load_active_timer() is None
     assert repository.get_pomodoro_state() == (0, 0)
     assert repository.get_recent_sessions() == [("Anki", 60, "2026-01-01T12:00:00+07:00")]
-    assert repository.get_focus_progress("Anki") == 0
+    assert repository.get_focus_progress() == 0
 
 
 def test_accumulated_focus_multiple_resets_subjects_and_restart():
     first = snapshot("focus", 607)
     repository.reset_active_timer(first)
     repository.reset_active_timer(first)
-    assert repository.get_focus_progress("English") == 893
-    assert repository.get_focus_progress("Umum") == 0
+    assert repository.get_focus_progress() == 893
     timer = service()
     try:
-        assert timer.focus_seconds_remaining("English") == 607
-        assert timer.focus_seconds_remaining("Umum") == 1500
+        assert timer.focus_seconds_remaining() == 607
         timer.start_pomodoro("English")
         wait_for(lambda: timer.current_phase == "focus")
         timer.pause_timer()
         assert timer._progress.total_seconds == 607
         assert timer.reset_timer()
-        assert repository.get_focus_progress("English") == 893
+        assert repository.get_focus_progress() == 893
         second = replace(first, session_id=str(uuid4()), total_seconds=607, remaining_seconds=400)
         repository.reset_active_timer(second)
-        assert repository.get_focus_progress("English") == 1100
-        assert service().focus_seconds_remaining("English") == 400
+        assert repository.get_focus_progress() == 1100
+        assert service().focus_seconds_remaining() == 400
         assert repository.get_summary_by_subject() == [("English", 1100, 2)]
         assert repository.get_pomodoro_state() == (0, 0)
     finally:
         timer.suspend_for_close()
+
+
+@pytest.mark.parametrize("umum", [None, 415, 727])
+def test_shared_migration_uses_umum_once_and_preserves_legacy_data(umum):
+    repository.save_session("Anki", 60)
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("DROP TABLE shared_focus_progress")
+        connection.execute("UPDATE pomodoro_state SET balance_seconds = 75, cycle_position = 2")
+        connection.execute("INSERT INTO subject_focus_progress VALUES ('Anki', 120)")
+        if umum is not None:
+            connection.execute("INSERT INTO subject_focus_progress VALUES ('Umum', ?)", (umum,))
+    assert repository.get_focus_progress() == (umum or 0)
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        before = connection.execute("SELECT * FROM subject_focus_progress ORDER BY subject").fetchall()
+        connection.execute("UPDATE shared_focus_progress SET elapsed_seconds = 800")
+    assert repository.get_focus_progress() == 800
+    assert repository.get_pomodoro_state() == (75, 2)
+    assert repository.get_summary_by_subject() == [("Anki", 60, 1)]
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        assert connection.execute("SELECT * FROM subject_focus_progress ORDER BY subject").fetchall() == before
+        assert connection.execute("SELECT migration_version FROM shared_focus_progress").fetchone() == (1,)
+
+
+@pytest.mark.parametrize("suspended,remaining", [(False, 500), (True, 500), (False, 0)])
+def test_shared_migration_preserves_legacy_active_focus(suspended, remaining):
+    repository.save_session("English", 893)
+    focus = snapshot("focus", remaining, 607)
+    saved = replace(snapshot("break", 2, 10), suspended_focus=focus) if suspended else focus
+    repository.save_active_timer(saved)
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("DROP TABLE shared_focus_progress")
+        connection.execute("INSERT INTO subject_focus_progress VALUES ('Umum', 415)")
+        connection.execute("INSERT INTO subject_focus_progress VALUES ('English', 893)")
+    assert repository.get_focus_progress() == 893
+    assert repository.load_active_timer() == saved
+    repository.reset_active_timer(saved)
+    repository.reset_active_timer(saved)
+    assert repository.get_focus_progress() == (1000 if remaining else 0)
+    assert repository.get_summary_by_subject() == [("English", 1500 - remaining, 2)]
+    assert repository.get_pomodoro_state() == ((0, 0) if remaining else (300, 1))
+
+
+def test_shared_migration_failure_rolls_back_and_retries():
+    repository.get_pomodoro_state()
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("DROP TABLE shared_focus_progress")
+        connection.execute("INSERT INTO subject_focus_progress VALUES ('Umum', 1500)")
+    with pytest.raises(sqlite3.DatabaseError):
+        repository.get_focus_progress()
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("UPDATE subject_focus_progress SET elapsed_seconds = 415")
+    assert repository.get_focus_progress() == 415
+
+
+def test_shared_target_cross_subject_completion_and_duplicate_retry(monkeypatch):
+    first = replace(snapshot("focus", 1080), subject="Umum")
+    repository.reset_active_timer(first)
+    repository.reset_active_timer(first)
+    assert repository.get_focus_progress() == 420
+    timer = service()
+
+    def finish_segment(seconds, *args, **kwargs):
+        assert seconds == 1080
+        timer._checkpoint(replace(timer._progress, remaining_seconds=0))
+        return True
+
+    monkeypatch.setattr(timer, "_run_countdown", finish_segment)
+    try:
+        timer.start_pomodoro("Anki")
+        wait_for(lambda: timer.is_alarm_active)
+        repository.complete_pomodoro_focus("Anki", 1080, timer._progress)
+        assert repository.get_summary_by_subject() == [("Anki", 1080, 1), ("Umum", 420, 1)]
+        assert repository.get_focus_progress() == 0
+        assert repository.get_pomodoro_state() == (300, 1)
+        assert timer.focus_seconds_remaining() == 1500
+    finally:
+        timer.reset_timer()
 
 
 def test_accumulated_remainder_completes_once_and_next_focus_is_full(monkeypatch):
@@ -449,7 +524,7 @@ def test_accumulated_remainder_completes_once_and_next_focus_is_full(monkeypatch
         wait_for(lambda: timer.is_alarm_active)
         assert observed == [607]
         assert repository.get_summary_by_subject() == [("English", 1500, 2)]
-        assert repository.get_focus_progress("English") == 0
+        assert repository.get_focus_progress() == 0
         assert repository.get_pomodoro_state() == (300, 1)
         timer.stop_alarm()
         wait_for(lambda: timer.current_phase == "choice")
@@ -473,9 +548,9 @@ def test_accumulated_short_segment_recovers_without_counting_twice():
     try:
         assert reopened.restore_progress() == segment
         assert reopened.reset_timer()
-        assert repository.get_focus_progress("English") == 1000
+        assert repository.get_focus_progress() == 1000
         assert repository.get_summary_by_subject() == [("English", 1000, 2)]
-        assert reopened.focus_seconds_remaining("English") == 500
+        assert reopened.focus_seconds_remaining() == 500
     finally:
         reopened.suspend_for_close()
 
@@ -489,7 +564,7 @@ def test_reset_at_zero_awards_target_once_and_rolls_back_on_failure():
             BEGIN SELECT RAISE(ABORT, 'failure'); END""")
     with pytest.raises(sqlite3.DatabaseError):
         repository.reset_active_timer(segment)
-    assert repository.get_focus_progress("English") == 893
+    assert repository.get_focus_progress() == 893
     assert repository.get_pomodoro_state() == (0, 0)
     assert repository.get_summary_by_subject() == [("English", 893, 1)]
     assert repository.load_active_timer() == segment
@@ -497,7 +572,7 @@ def test_reset_at_zero_awards_target_once_and_rolls_back_on_failure():
         connection.execute("DROP TRIGGER fail_reset")
     assert repository.reset_active_timer(segment) == (300, 1)
     assert repository.reset_active_timer(segment) == (300, 1)
-    assert repository.get_focus_progress("English") == 0
+    assert repository.get_focus_progress() == 0
     assert repository.get_summary_by_subject() == [("English", 1500, 2)]
 
 
@@ -505,11 +580,11 @@ def test_focus_read_failure_prevents_start_and_can_retry(monkeypatch):
     timer = service()
     original = timer_service.get_focus_progress
 
-    def fail(_):
+    def fail():
         raise sqlite3.OperationalError("cannot read progress")
 
     monkeypatch.setattr(timer_service, "get_focus_progress", fail)
-    assert timer.focus_seconds_remaining("English") is None
+    assert timer.focus_seconds_remaining() is None
     timer.start_pomodoro("English")
     assert not timer.is_running
     assert repository.load_active_timer() is None
@@ -529,14 +604,14 @@ def test_preview_accumulation_is_isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "POMODORO_FOCUS_SECONDS", 10)
     monkeypatch.setattr(config, "POMODORO_SHORT_BREAK_SECONDS", 5)
     repository.reset_active_timer(snapshot("focus", 6, 10))
-    assert service().focus_seconds_remaining("English") == 6
-    assert repository.get_focus_progress("English") == 4
+    assert service().focus_seconds_remaining() == 6
+    assert repository.get_focus_progress() == 4
     segment = snapshot("focus", 0, 6)
     assert repository.reset_active_timer(segment) == (5, 1)
     assert repository.get_summary_by_subject() == [("English", 10, 2)]
     monkeypatch.setattr(config, "DATABASE_PATH", normal_path)
     monkeypatch.setattr(config, "POMODORO_FOCUS_SECONDS", 1500)
-    assert repository.get_focus_progress("English") == 893
+    assert repository.get_focus_progress() == 893
     assert repository.get_pomodoro_state() == (0, 0)
 
 
