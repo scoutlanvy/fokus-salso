@@ -43,7 +43,7 @@ def test_tick_starts_immediately_and_stops_on_pause_reset(monkeypatch):
         service.reset_timer()
 
 
-def test_tick_preference_survives_new_service_and_audio_is_one_second():
+def test_tick_preference_survives_new_service_and_audio_has_silent_tail():
     service = make_service()
     assert not service.tick_sound_enabled
     service.change_tick_sound(True)
@@ -51,7 +51,13 @@ def test_tick_preference_survives_new_service_and_audio_is_one_second():
     service.change_tick_sound(False)
     assert not make_service().tick_sound_enabled
     with wave.open(str(service.tick_sound_path), "rb") as sound:
+        assert sound.getnchannels() == 1
+        assert sound.getsampwidth() == 2
         assert sound.getnframes() == sound.getframerate()
+        first_millisecond = sound.readframes(round(sound.getframerate() * 0.001))
+        assert any(first_millisecond)
+        sound.setpos(round(sound.getframerate() * 0.035))
+        assert not any(sound.readframes(sound.getnframes()))
 
 
 def test_tick_matches_displayed_seconds_even_when_storage_is_slow(monkeypatch):

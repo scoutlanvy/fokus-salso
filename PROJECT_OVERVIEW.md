@@ -132,7 +132,9 @@ storage blocks, and idle target-read failures. A successful Retry re-enables it.
 Manual duration is unaffected by changing the Pomodoro progress preference. The
 tick sound applies to every countdown phase (Manual, Pomodoro focus, and breaks),
 starts when the countdown starts or resumes, and stays saved across restarts.
-`tick.wav` contains one short tick followed by silence over one second. It plays
+`tick.wav` contains a 35 ms tick at the start with silence up to one second. Keep
+this trailing silence: shortening the file caused delayed/intermittent tick
+playback reported on Windows. The silence does not delay the sound's onset. It plays
 once on Start/Resume and once alongside each nonzero countdown update after its
 checkpoint succeeds. Playback has no independent loop, so storage delays cannot
 cause additional ticks while the displayed second is unchanged. Pause, storage
