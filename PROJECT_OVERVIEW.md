@@ -82,8 +82,14 @@ never count twice. Repository `get_focus_progress(subject="Umum")` and service
 Normal and preview data remain isolated.
 
 `pomodoro_settings` stores `focus_scope` (`shared` by default or `per_subject`)
-and `tick_sound` (off by default). Older settings tables gain the tick preference
-with a default of off. `get_tick_sound()` and `set_tick_sound()` read and save it.
+and `tick_sound` (off by default), plus `tick_volume_percent` (0–400, default 100).
+The legacy `tick_volume` column keeps its 0–100 constraint. On migration, its saved
+value initializes `tick_volume_percent`. New saves write the actual percentage to
+the new column and cap the legacy value at 100, avoiding a table rebuild.
+Older tables gain missing columns without changing saved preferences or history.
+`get_tick_sound()` / `set_tick_sound()` read and save On/Off; `get_tick_volume()`
+reads volume. Settings Save passes optional tick preferences to `set_focus_scope()`
+so scope, On/Off, volume, and destination progress validation share one transaction.
 The new `per_subject_focus_progress` table starts empty; it never imports archived
 `subject_focus_progress` rows, which may already have contributed to shared progress.
 Changing scope does not copy, clear, or merge progress. Each scope resumes its own
@@ -122,7 +128,8 @@ Start with Retry until a successful read; starting also rechecks storage before
 creating a checkpoint. Active preparation failures pause for Resume to retry.
 
 Settings beside Show History opens a modal dialog with Shared across subjects and
-Per subject radio choices, a Tick every second switch, explanatory text, Save, and Cancel. The dialog uses the
+Per subject radio choices, a Tick every second switch, a 0–400% tick volume slider,
+explanatory text, Save, and Cancel. The dialog uses the
 saved preference; Cancel/Escape/window-close discard only its pending selection.
 Save refreshes the info text and, in Pomodoro, countdown and Target progress from
 the transaction's returned value, avoiding a second read after commit. Failure
@@ -140,6 +147,14 @@ checkpoint succeeds. Playback has no independent loop, so storage delays cannot
 cause additional ticks while the displayed second is unchanged. Pause, storage
 errors, Reset, close, and countdown exit stop playback before the completion alarm.
 The completion alarm remains independent of this switch.
+Volume scales only the tick's 16-bit PCM samples; 0% mutes ticking, 100% preserves
+the original audio, and 101–400% boosts it. The bundled audio has sufficient
+headroom for 400%; scaling also clamps samples to the signed 16-bit range. The service
+prepares and caches scaled one-second WAV files in a system temporary directory
+while idle, before committing Settings, so countdown playback performs no audio
+conversion. Source audio, onset, duration, and silent tail stay intact. Normal
+close cleans these generated files; failed saves preserve all active preferences.
+Alarm and Windows system volume are unaffected.
 
 The resizable window defaults to 900x620. The left column contains timer controls
 and scrolls in small windows; the right contains history. History starts hidden on

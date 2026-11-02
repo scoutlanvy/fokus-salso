@@ -61,6 +61,12 @@ Kedua pilihan menyimpan progres masing-masing. Misalnya, Bersama tersisa **18:00
 
 Settings hanya dapat diubah saat timer tidak aktif. Saat timer berjalan, paused, break, alarm, atau menunggu **Continue Focus**, selesaikan atau **Reset** timer terlebih dahulu. Jika penyimpanan bermasalah, pulihkan dulu aksesnya. **Cancel**, Escape, atau menutup dialog membatalkan pilihan yang belum disimpan. Jika Save gagal, dialog menampilkan kesalahan dan pilihan sebelumnya tetap dipakai; Save dapat dicoba lagi.
 
+Untuk bunyi tik di semua mode, aktifkan **Tick every second**, lalu atur slider
+**Tick volume** dari **0–400%** dan klik **Save**. Nilai 0% membisukan tik,
+100% memakai volume asli, dan di atas 100% memperkeras bunyi tik. Pilihan
+On/Off dan volume tetap tersimpan setelah aplikasi ditutup dan dibuka kembali.
+Volume ini hanya mengatur tik, tanpa mengubah volume alarm atau Windows.
+
 History tetap mencatat waktu per subjek. Saldo break dan urutan hadiah tetap bersama untuk kedua pilihan. Pengaturan ini tidak mengubah durasi Manual. Mode percobaan menyimpan pilihan dan progresnya sendiri.
 
 ## Mencoba Pomodoro dengan cepat

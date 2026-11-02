@@ -844,11 +844,17 @@ def inspect(app):
                        if isinstance(w, gui.SubjectOptionMenu))
         assert displayed('00:18:00')
         dialog = open_settings('per_subject')
+        slider = next(w for w in descendants(dialog) if isinstance(w, ctk.CTkSlider))
+        slider.set(10)
         button('Cancel', dialog).invoke()
+        assert repo.get_tick_volume() == 100
         assert repo.get_focus_scope() == 'shared'
         assert displayed('00:18:00')
         dialog = open_settings('per_subject')
+        slider = next(w for w in descendants(dialog) if isinstance(w, ctk.CTkSlider))
+        slider.set(250)
         button('Save', dialog).invoke()
+        assert repo.get_tick_volume() == service.tick_volume == 250
         assert not dialog.winfo_exists()
         assert displayed('00:25:00')
         subject.set('Anki')
@@ -860,7 +866,7 @@ def inspect(app):
         assert displayed('00:18:00')
         dialog = open_settings('per_subject')
         original_save = timer_service.set_focus_scope
-        def fail(*args):
+        def fail(*args, **kwargs):
             raise sqlite3.OperationalError('disk full')
         timer_service.set_focus_scope = fail
         button('Save', dialog).invoke()
@@ -875,6 +881,7 @@ def inspect(app):
         assert any(isinstance(w, ctk.CTkLabel) and 'Separate target for each subject.' in w.cget('text')
                    for w in descendants(app))
         reopened = original_service(lambda _: None, lambda _: None, lambda *a: None)
+        assert reopened.tick_volume == 250
         assert reopened.focus_scope == 'per_subject'
         assert reopened.focus_seconds_remaining('Anki') == 1380
         button('Start').invoke()

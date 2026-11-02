@@ -206,6 +206,12 @@ def _pomodoro_transaction():
             columns = {row[1] for row in connection.execute("PRAGMA table_info(pomodoro_settings)")}
             if "tick_sound" not in columns:
                 connection.execute("ALTER TABLE pomodoro_settings ADD COLUMN tick_sound INTEGER NOT NULL DEFAULT 0 CHECK (tick_sound IN (0, 1))")
+            if "tick_volume" not in columns:
+                connection.execute("ALTER TABLE pomodoro_settings ADD COLUMN tick_volume INTEGER NOT NULL DEFAULT 100 CHECK (tick_volume BETWEEN 0 AND 100)")
+            if "tick_volume_percent" not in columns:
+                # Keep the old constrained column and migrate without rebuilding the table.
+                connection.execute("ALTER TABLE pomodoro_settings ADD COLUMN tick_volume_percent INTEGER NOT NULL DEFAULT 100 CHECK (tick_volume_percent BETWEEN 0 AND 400)")
+                connection.execute("UPDATE pomodoro_settings SET tick_volume_percent = tick_volume")
             connection.execute("INSERT OR IGNORE INTO pomodoro_settings (id, focus_scope) VALUES (1, 'shared')")
             # Legacy subject_focus_progress remains an archive, never imported here.
             connection.execute("""CREATE TABLE IF NOT EXISTS per_subject_focus_progress (
@@ -246,14 +252,29 @@ def set_tick_sound(enabled: bool) -> bool:
         return bool(enabled)
 
 
-def set_focus_scope(scope: str, subject: str) -> int:
+def get_tick_volume() -> int:
+    with _pomodoro_transaction() as connection:
+        volume = connection.execute("SELECT tick_volume_percent FROM pomodoro_settings WHERE id = 1").fetchone()[0]
+        if type(volume) is not int or not 0 <= volume <= 400:
+            raise sqlite3.DatabaseError("Invalid tick volume setting")
+        return volume
+
+
+def set_focus_scope(scope: str, subject: str, *, tick_sound=None, tick_volume=None) -> int:
     """Save the idle preference and return its target progress atomically."""
     if scope not in FOCUS_SCOPES:
         raise ValueError("Unknown Pomodoro progress setting")
+    if tick_volume is not None and (type(tick_volume) is not int or not 0 <= tick_volume <= 400):
+        raise ValueError("Tick volume must be between 0 and 400")
     with _pomodoro_transaction() as connection:
         if connection.execute("SELECT 1 FROM active_timer WHERE phase != 'done'").fetchone():
             raise ValueError("Reset or finish the timer before changing Settings.")
         connection.execute("UPDATE pomodoro_settings SET focus_scope = ? WHERE id = 1", (scope,))
+        if tick_sound is not None:
+            connection.execute("UPDATE pomodoro_settings SET tick_sound = ? WHERE id = 1", (int(bool(tick_sound)),))
+        if tick_volume is not None:
+            connection.execute("UPDATE pomodoro_settings SET tick_volume = ?, tick_volume_percent = ? WHERE id = 1",
+                               (min(tick_volume, 100), tick_volume))
         return _get_focus_progress(connection, subject)
 
 

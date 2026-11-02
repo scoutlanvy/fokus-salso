@@ -2,11 +2,14 @@ import queue
 import threading
 import wave
 import time
+import sqlite3
+from array import array
 
 import pytest
 
 import config
 import timer_service
+import session_repository as repository
 from timer_service import TimerService
 
 
@@ -19,6 +22,84 @@ def silent_alarm(monkeypatch, tmp_path):
 
 def make_service():
     return TimerService(lambda _: None, lambda _: None, lambda *_, **__: None)
+
+
+@pytest.mark.parametrize("volume", [0, 25, 50, 100, 200, 400])
+def test_tick_volume_scales_audio_and_persists_without_changing_timing(volume, monkeypatch):
+    service = make_service()
+    reopened = None
+    try:
+        service.change_focus_scope("shared", "Umum", True, volume)
+        with wave.open(str(service._tick_source_path), "rb") as source:
+            params = source.getparams()
+            original = array("h", source.readframes(source.getnframes()))
+        with wave.open(str(service.tick_sound_path), "rb") as scaled:
+            assert scaled.getparams() == params
+            actual = array("h", scaled.readframes(scaled.getnframes()))
+        assert actual == array("h", (round(sample * volume / 100) for sample in original))
+        playback = []
+        monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: playback.append(args))
+        service._play_tick()
+        if volume == 0:
+            assert not playback
+        else:
+            assert playback[0][0] == str(service.tick_sound_path)
+            assert not playback[0][1] & timer_service.winsound.SND_LOOP
+        reopened = make_service()
+        assert reopened.tick_volume == volume
+        assert reopened.tick_sound_enabled
+    finally:
+        service.suspend_for_close()
+        if reopened is not None:
+            reopened.suspend_for_close()
+
+
+def test_failed_volume_save_keeps_all_settings_unchanged():
+    service = make_service()
+    original_path = service.tick_sound_path
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("""CREATE TRIGGER fail_volume BEFORE UPDATE OF tick_volume ON pomodoro_settings
+            BEGIN SELECT RAISE(ABORT, 'disk full'); END""")
+    try:
+        with pytest.raises(sqlite3.DatabaseError):
+            service.change_focus_scope("per_subject", "Umum", True, 25)
+        assert service.focus_scope == repository.get_focus_scope() == "shared"
+        assert service.tick_volume == repository.get_tick_volume() == 100
+        assert not service.tick_sound_enabled and not repository.get_tick_sound()
+        assert service.tick_sound_path == original_path
+    finally:
+        service.suspend_for_close()
+
+
+def test_tick_volume_migration_preserves_previous_settings():
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("CREATE TABLE pomodoro_settings (id INTEGER PRIMARY KEY, focus_scope TEXT, tick_sound INTEGER)")
+        connection.execute("INSERT INTO pomodoro_settings VALUES (1, 'per_subject', 1)")
+    assert repository.get_tick_volume() == 100
+    assert repository.get_tick_sound()
+    assert repository.get_focus_scope() == "per_subject"
+
+
+def test_tick_boost_migration_preserves_saved_volume():
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        connection.execute("""CREATE TABLE pomodoro_settings (
+            id INTEGER PRIMARY KEY, focus_scope TEXT, tick_sound INTEGER,
+            tick_volume INTEGER NOT NULL DEFAULT 100 CHECK (tick_volume BETWEEN 0 AND 100))""")
+        connection.execute("INSERT INTO pomodoro_settings VALUES (1, 'per_subject', 1, 42)")
+    assert repository.get_tick_volume() == 42
+    repository.set_focus_scope("per_subject", "Umum", tick_volume=400)
+    assert repository.get_tick_volume() == 400
+    assert repository.get_tick_sound()
+    with sqlite3.connect(config.DATABASE_PATH) as connection:
+        assert connection.execute("SELECT tick_volume, tick_volume_percent FROM pomodoro_settings").fetchone() == (100, 400)
+
+
+@pytest.mark.parametrize("volume", [-1, 401])
+def test_invalid_tick_boost_keeps_saved_volume(volume):
+    service = make_service()
+    with pytest.raises(ValueError):
+        service.change_focus_scope("shared", "Umum", True, volume)
+    assert service.tick_volume == repository.get_tick_volume() == 100
 
 
 def test_tick_starts_immediately_and_stops_on_pause_reset(monkeypatch):

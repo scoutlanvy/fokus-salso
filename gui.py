@@ -355,7 +355,7 @@ def _run_app() -> None:
             return
         settings_dialog = dialog = ctk.CTkToplevel(app)
         dialog.title("Settings")
-        dialog.geometry("460x470")
+        dialog.geometry("460x550")
         dialog.resizable(False, False)
         dialog.transient(app)
         dialog.grab_set()
@@ -381,6 +381,16 @@ def _run_app() -> None:
                                     onvalue=True, offvalue=False)
         tick_switch.pack(anchor="w", padx=20, pady=4)
         settings_controls.append(tick_switch)
+        volume_label = ctk.CTkLabel(dialog, text=f"Tick volume: {timer_service.tick_volume}%")
+        volume_label.pack(anchor="w", padx=20, pady=(8, 0))
+        volume_slider = ctk.CTkSlider(
+            dialog, from_=0, to=400, number_of_steps=400,
+            command=lambda value: volume_label.configure(text=f"Tick volume: {round(value)}%"))
+        volume_slider.set(timer_service.tick_volume)
+        volume_slider.pack(fill="x", padx=20, pady=(4, 8))
+        settings_controls.append(volume_slider)
+        ctk.CTkLabel(dialog, text="100% = original volume; above 100% boosts the tick.",
+                     wraplength=410, justify="left").pack(anchor="w", padx=20, pady=(0, 4))
         error_label = ctk.CTkLabel(dialog, text="", text_color=("#b00020", "#ff8888"), wraplength=410)
         error_label.pack(fill="x", padx=20, pady=4)
 
@@ -392,8 +402,8 @@ def _run_app() -> None:
 
         def save():
             try:
-                remaining = timer_service.change_focus_scope(selected_scope.get(), selected_subject.get())
-                timer_service.change_tick_sound(selected_tick.get())
+                remaining = timer_service.change_focus_scope(
+                    selected_scope.get(), selected_subject.get(), selected_tick.get(), round(volume_slider.get()))
             except (OSError, sqlite3.Error, ValueError) as error:
                 error_label.configure(text=f"Could not save Settings: {error}")
                 return
