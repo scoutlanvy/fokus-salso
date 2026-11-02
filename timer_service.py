@@ -11,7 +11,7 @@ import config
 from session_repository import (
     save_session, get_pomodoro_state, complete_pomodoro_focus, consume_break_second,
     ActiveTimer, load_active_timer, save_active_timer, clear_active_timer, reset_active_timer,
-    get_focus_progress, get_focus_scope, set_focus_scope,
+    get_focus_progress, get_focus_scope, set_focus_scope, get_tick_sound, set_tick_sound,
 )
 
 Callback = Callable[[str], None]
@@ -51,6 +51,8 @@ class TimerService:
         self._focus_break_event = threading.Event()
         self._storage_retry = False
         self.focus_scope = "shared"
+        self.tick_sound_enabled = False
+        self.tick_sound_path = Path(__file__).with_name("tick.wav")
         self.focus_read_failed = False
         self.storage_blocked = not self._load_balance()
 
@@ -94,6 +96,13 @@ class TimerService:
             progress = set_focus_scope(scope, subject)
             self.focus_scope = scope
             return config.POMODORO_FOCUS_SECONDS - progress
+
+    def change_tick_sound(self, enabled):
+        with self._command_lock:
+            if not self.can_change_settings():
+                raise ValueError("Settings can only change while the timer is idle and storage is available.")
+            self.tick_sound_enabled = set_tick_sound(enabled)
+            return self.tick_sound_enabled
 
     def focus_target_progress(self):
         """Active progress includes the carried portion and this running segment."""
@@ -180,6 +189,7 @@ class TimerService:
         try:
             balance, position = get_pomodoro_state()
             scope = get_focus_scope()
+            self.tick_sound_enabled = get_tick_sound()
             self.break_balance_seconds, self.cycle_position = balance, position
             self.focus_scope = scope
             return True
@@ -326,6 +336,8 @@ class TimerService:
                 self._load_balance()
                 self.set_status("Break balance used by another window")
                 return False
+            if self.tick_sound_enabled:
+                winsound.PlaySound(str(self.tick_sound_path), winsound.SND_FILENAME | winsound.SND_ASYNC)
             previous = time.monotonic()
             with self._command_lock:
                 self.set_countdown(self.format_hms(self.remaining_seconds))

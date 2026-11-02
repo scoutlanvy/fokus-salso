@@ -200,9 +200,13 @@ def _pomodoro_transaction():
             _migrate_shared_focus(connection)
             connection.execute("""CREATE TABLE IF NOT EXISTS pomodoro_settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                focus_scope TEXT NOT NULL CHECK (focus_scope IN ('shared', 'per_subject'))
+                focus_scope TEXT NOT NULL CHECK (focus_scope IN ('shared', 'per_subject')),
+                tick_sound INTEGER NOT NULL DEFAULT 0 CHECK (tick_sound IN (0, 1))
             )""")
-            connection.execute("INSERT OR IGNORE INTO pomodoro_settings VALUES (1, 'shared')")
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(pomodoro_settings)")}
+            if "tick_sound" not in columns:
+                connection.execute("ALTER TABLE pomodoro_settings ADD COLUMN tick_sound INTEGER NOT NULL DEFAULT 0 CHECK (tick_sound IN (0, 1))")
+            connection.execute("INSERT OR IGNORE INTO pomodoro_settings (id, focus_scope) VALUES (1, 'shared')")
             # Legacy subject_focus_progress remains an archive, never imported here.
             connection.execute("""CREATE TABLE IF NOT EXISTS per_subject_focus_progress (
                 subject TEXT PRIMARY KEY,
@@ -229,6 +233,17 @@ def _get_focus_scope(connection):
 def get_focus_scope() -> str:
     with _pomodoro_transaction() as connection:
         return _get_focus_scope(connection)
+
+
+def get_tick_sound() -> bool:
+    with _pomodoro_transaction() as connection:
+        return bool(connection.execute("SELECT tick_sound FROM pomodoro_settings WHERE id = 1").fetchone()[0])
+
+
+def set_tick_sound(enabled: bool) -> bool:
+    with _pomodoro_transaction() as connection:
+        connection.execute("UPDATE pomodoro_settings SET tick_sound = ? WHERE id = 1", (int(bool(enabled)),))
+        return bool(enabled)
 
 
 def set_focus_scope(scope: str, subject: str) -> int:

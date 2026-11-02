@@ -81,7 +81,9 @@ never count twice. Repository `get_focus_progress(subject="Umum")` and service
 `focus_seconds_remaining(subject="Umum")` read the target using the persisted scope.
 Normal and preview data remain isolated.
 
-`pomodoro_settings` stores one `focus_scope` (`shared` by default or `per_subject`).
+`pomodoro_settings` stores `focus_scope` (`shared` by default or `per_subject`)
+and `tick_sound` (off by default). Older settings tables gain the tick preference
+with a default of off. `get_tick_sound()` and `set_tick_sound()` read and save it.
 The new `per_subject_focus_progress` table starts empty; it never imports archived
 `subject_focus_progress` rows, which may already have contributed to shared progress.
 Changing scope does not copy, clear, or merge progress. Each scope resumes its own
@@ -120,14 +122,17 @@ Start with Retry until a successful read; starting also rechecks storage before
 creating a checkpoint. Active preparation failures pause for Resume to retry.
 
 Settings beside Show History opens a modal dialog with Shared across subjects and
-Per subject radio choices, explanatory text, Save, and Cancel. The dialog uses the
+Per subject radio choices, a Tick every second switch, explanatory text, Save, and Cancel. The dialog uses the
 saved preference; Cancel/Escape/window-close discard only its pending selection.
 Save refreshes the info text and, in Pomodoro, countdown and Target progress from
 the transaction's returned value, avoiding a second read after commit. Failure
 keeps the dialog open with an error and preserves the main display/preference.
 Settings is disabled during all active phases (including pause, alarm and choice),
 storage blocks, and idle target-read failures. A successful Retry re-enables it.
-Manual duration is unaffected by changing this Pomodoro preference.
+Manual duration is unaffected by changing the Pomodoro progress preference. The
+tick sound applies to every countdown phase (Manual, Pomodoro focus, and breaks),
+plays after each successfully persisted second, and stays saved across restarts.
+The completion alarm remains independent of this switch.
 
 The resizable window defaults to 900x620. The left column contains timer controls
 and scrolls in small windows; the right contains history. History starts hidden on

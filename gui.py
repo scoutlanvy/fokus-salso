@@ -355,11 +355,12 @@ def _run_app() -> None:
             return
         settings_dialog = dialog = ctk.CTkToplevel(app)
         dialog.title("Settings")
-        dialog.geometry("460x370")
+        dialog.geometry("460x470")
         dialog.resizable(False, False)
         dialog.transient(app)
         dialog.grab_set()
         selected_scope = ctk.StringVar(master=dialog, value=timer_service.focus_scope)
+        selected_tick = ctk.BooleanVar(master=dialog, value=timer_service.tick_sound_enabled)
         settings_controls.clear()
         ctk.CTkLabel(dialog, text="Pomodoro progress", font=("Helvetica", 18, "bold")).pack(
             anchor="w", padx=20, pady=(18, 12))
@@ -374,6 +375,12 @@ def _run_app() -> None:
                 anchor="w", padx=20, pady=(0, 4))
         ctk.CTkLabel(dialog, text="Both options keep their progress separately.\nSwitching back resumes the progress saved there.",
                      wraplength=410, justify="left").pack(anchor="w", padx=20, pady=(8, 0))
+        ctk.CTkLabel(dialog, text="Timer sound", font=("Helvetica", 16, "bold")).pack(
+            anchor="w", padx=20, pady=(16, 4))
+        tick_switch = ctk.CTkSwitch(dialog, text="Tick every second", variable=selected_tick,
+                                    onvalue=True, offvalue=False)
+        tick_switch.pack(anchor="w", padx=20, pady=4)
+        settings_controls.append(tick_switch)
         error_label = ctk.CTkLabel(dialog, text="", text_color=("#b00020", "#ff8888"), wraplength=410)
         error_label.pack(fill="x", padx=20, pady=4)
 
@@ -386,6 +393,7 @@ def _run_app() -> None:
         def save():
             try:
                 remaining = timer_service.change_focus_scope(selected_scope.get(), selected_subject.get())
+                timer_service.change_tick_sound(selected_tick.get())
             except (OSError, sqlite3.Error, ValueError) as error:
                 error_label.configure(text=f"Could not save Settings: {error}")
                 return
