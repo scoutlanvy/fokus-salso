@@ -21,7 +21,7 @@ def make_service():
     return TimerService(lambda _: None, lambda _: None, lambda *_, **__: None)
 
 
-def test_tick_loop_starts_immediately_and_stops_on_pause_reset(monkeypatch):
+def test_tick_starts_immediately_and_stops_on_pause_reset(monkeypatch):
     service = make_service()
     service.change_tick_sound(True)
     playback = queue.Queue()
@@ -30,7 +30,7 @@ def test_tick_loop_starts_immediately_and_stops_on_pause_reset(monkeypatch):
     try:
         sound, flags = playback.get(timeout=0.8)
         assert sound == str(service.tick_sound_path)
-        assert flags & timer_service.winsound.SND_LOOP
+        assert not flags & timer_service.winsound.SND_LOOP
         assert service.remaining_seconds == 30
         service.pause_timer()
         assert playback.get(timeout=0.8) == (None, 0)
@@ -43,7 +43,7 @@ def test_tick_loop_starts_immediately_and_stops_on_pause_reset(monkeypatch):
         service.reset_timer()
 
 
-def test_tick_preference_survives_new_service_and_loop_is_one_second():
+def test_tick_preference_survives_new_service_and_audio_is_one_second():
     service = make_service()
     assert not service.tick_sound_enabled
     service.change_tick_sound(True)
@@ -52,6 +52,42 @@ def test_tick_preference_survives_new_service_and_loop_is_one_second():
     assert not make_service().tick_sound_enabled
     with wave.open(str(service.tick_sound_path), "rb") as sound:
         assert sound.getnframes() == sound.getframerate()
+
+
+def test_tick_matches_displayed_seconds_even_when_storage_is_slow(monkeypatch):
+    service = make_service()
+    service.change_tick_sound(True)
+    playback = queue.Queue()
+    displayed = []
+    saving = threading.Event()
+    release_save = threading.Event()
+    original_checkpoint = service._checkpoint
+
+    def slow_checkpoint(timer):
+        if timer.remaining_seconds == 29:
+            saving.set()
+            assert release_save.wait(3)
+        original_checkpoint(timer)
+
+    service.set_countdown = displayed.append
+    monkeypatch.setattr(service, "_checkpoint", slow_checkpoint)
+    monkeypatch.setattr(timer_service.winsound, "PlaySound",
+                        lambda sound, flags: playback.put((sound, flags, displayed[-1])))
+    service.start_timer(30, "Umum")
+    try:
+        assert playback.get(timeout=0.8)[2] == "00:00:30"
+        assert saving.wait(2)
+        # A slow checkpoint must not emit ticks while the old second is displayed.
+        with pytest.raises(queue.Empty):
+            playback.get(timeout=0.3)
+        release_save.set()
+        sound, flags, value = playback.get(timeout=1)
+        assert sound == str(service.tick_sound_path)
+        assert not flags & timer_service.winsound.SND_LOOP
+        assert value == "00:00:29"
+    finally:
+        release_save.set()
+        service.reset_timer()
 
 
 def test_alarm_keeps_ringing_until_stopped(monkeypatch):

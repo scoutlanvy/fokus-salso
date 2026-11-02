@@ -132,11 +132,11 @@ storage blocks, and idle target-read failures. A successful Retry re-enables it.
 Manual duration is unaffected by changing the Pomodoro progress preference. The
 tick sound applies to every countdown phase (Manual, Pomodoro focus, and breaks),
 starts when the countdown starts or resumes, and stays saved across restarts.
-`tick.wav` contains one short tick followed by silence to make a one-second loop.
-Windows loops it continuously instead of reopening a short sound every second.
-Pause, storage errors, Reset, close, and countdown exit stop the loop before the
-completion alarm. Countdown checkpoints still persist once per elapsed second;
-sound cadence does not wait for storage.
+`tick.wav` contains one short tick followed by silence over one second. It plays
+once on Start/Resume and once alongside each nonzero countdown update after its
+checkpoint succeeds. Playback has no independent loop, so storage delays cannot
+cause additional ticks while the displayed second is unchanged. Pause, storage
+errors, Reset, close, and countdown exit stop playback before the completion alarm.
 The completion alarm remains independent of this switch.
 
 The resizable window defaults to 900x620. The left column contains timer controls

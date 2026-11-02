@@ -272,13 +272,13 @@ class TimerService:
             winsound.PlaySound(None, 0)
             self._tick_playing = False
 
-    def _start_tick(self):
+    def _play_tick(self):
         with self._alarm_lock:
-            if (self.tick_sound_enabled and not self._tick_playing
+            if (self.tick_sound_enabled
                     and not self.pause_event.is_set() and not self.stop_event.is_set()
                     and not self.is_alarm_active):
                 winsound.PlaySound(str(self.tick_sound_path),
-                                   winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_LOOP)
+                                   winsound.SND_FILENAME | winsound.SND_ASYNC)
                 self._tick_playing = True
 
     def _stop_tick(self):
@@ -329,7 +329,8 @@ class TimerService:
                 self.stop_event.wait(0.05)
                 previous = time.monotonic()
                 continue
-            self._start_tick()
+            if not self._tick_playing:
+                self._play_tick()
             self.stop_event.wait(0.05)
             now = time.monotonic()
             if self._focus_break_event.is_set():
@@ -373,6 +374,8 @@ class TimerService:
             previous = time.monotonic()
             with self._command_lock:
                 self.set_countdown(self.format_hms(self.remaining_seconds))
+                if self.remaining_seconds > 0:
+                    self._play_tick()
                 if self.current_phase == "break":
                     self.update_control_state(True, False, can_skip_break)
 
