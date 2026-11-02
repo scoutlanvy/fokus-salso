@@ -53,6 +53,7 @@ class TimerService:
         self.focus_scope = "shared"
         self.tick_sound_enabled = False
         self.tick_sound_path = Path(__file__).with_name("tick.wav")
+        self._tick_playing = False
         self.focus_read_failed = False
         self.storage_blocked = not self._load_balance()
 
@@ -168,6 +169,7 @@ class TimerService:
             if (self.is_running and not self.is_alarm_active
                     and self.current_phase in ("manual", "focus", "break", "starting")):
                 self.pause_event.set()
+                self._stop_tick()
             try:
                 if self._progress is not None:
                     save_active_timer(self._progress)
@@ -222,6 +224,7 @@ class TimerService:
                     return True
                 except (OSError, sqlite3.Error) as error:
                     self.pause_event.set()
+                    self._stop_tick()
                     self._storage_error(error)
                     self.set_status("Storage error - Resume to retry, or Reset")
                     self.update_control_state(True, True, False)
@@ -267,8 +270,35 @@ class TimerService:
         with self._alarm_lock:
             self.alarm_stop_event.set()
             winsound.PlaySound(None, 0)
+            self._tick_playing = False
+
+    def _start_tick(self):
+        with self._alarm_lock:
+            if (self.tick_sound_enabled and not self._tick_playing
+                    and not self.pause_event.is_set() and not self.stop_event.is_set()
+                    and not self.is_alarm_active):
+                winsound.PlaySound(str(self.tick_sound_path),
+                                   winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_LOOP)
+                self._tick_playing = True
+
+    def _stop_tick(self):
+        with self._alarm_lock:
+            if self._tick_playing:
+                winsound.PlaySound(None, 0)
+                self._tick_playing = False
 
     def _run_countdown(
+        self,
+        total_seconds: int,
+        status: str,
+        can_skip_break: bool = False,
+    ) -> bool:
+        try:
+            return self._countdown_intervals(total_seconds, status, can_skip_break)
+        finally:
+            self._stop_tick()
+
+    def _countdown_intervals(
         self,
         total_seconds: int,
         status: str,
@@ -295,15 +325,19 @@ class TimerService:
                 return False
 
             if self.pause_event.is_set():
+                self._stop_tick()
                 self.stop_event.wait(0.05)
                 previous = time.monotonic()
                 continue
+            self._start_tick()
             self.stop_event.wait(0.05)
             now = time.monotonic()
             if self._focus_break_event.is_set():
                 return False
             if self.stop_event.is_set() or self.pause_event.is_set() or self.skip_break_event.is_set():
                 previous = now
+                if self.pause_event.is_set():
+                    self._stop_tick()
                 continue
             elapsed += now - previous
             previous = now
@@ -336,8 +370,6 @@ class TimerService:
                 self._load_balance()
                 self.set_status("Break balance used by another window")
                 return False
-            if self.tick_sound_enabled:
-                winsound.PlaySound(str(self.tick_sound_path), winsound.SND_FILENAME | winsound.SND_ASYNC)
             previous = time.monotonic()
             with self._command_lock:
                 self.set_countdown(self.format_hms(self.remaining_seconds))
@@ -548,6 +580,7 @@ class TimerService:
             return
         with self._command_lock:
             self.pause_event.set()
+            self._stop_tick()
             try:
                 if self._progress is not None:
                     save_active_timer(self._progress)
@@ -579,6 +612,7 @@ class TimerService:
             if self.storage_blocked:
                 return False
             self.pause_event.set()
+            self._stop_tick()
             try:
                 result = reset_active_timer(self._progress)
                 if result is not None:

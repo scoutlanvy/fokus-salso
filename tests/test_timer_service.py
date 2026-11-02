@@ -21,6 +21,39 @@ def make_service():
     return TimerService(lambda _: None, lambda _: None, lambda *_, **__: None)
 
 
+def test_tick_loop_starts_immediately_and_stops_on_pause_reset(monkeypatch):
+    service = make_service()
+    service.change_tick_sound(True)
+    playback = queue.Queue()
+    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: playback.put(args))
+    service.start_timer(30, "Umum")
+    try:
+        sound, flags = playback.get(timeout=0.8)
+        assert sound == str(service.tick_sound_path)
+        assert flags & timer_service.winsound.SND_LOOP
+        assert service.remaining_seconds == 30
+        service.pause_timer()
+        assert playback.get(timeout=0.8) == (None, 0)
+        service.resume_timer()
+        assert playback.get(timeout=0.8)[0] == str(service.tick_sound_path)
+        service.reset_timer()
+        assert playback.get(timeout=0.8) == (None, 0)
+        assert not service._tick_playing
+    finally:
+        service.reset_timer()
+
+
+def test_tick_preference_survives_new_service_and_loop_is_one_second():
+    service = make_service()
+    assert not service.tick_sound_enabled
+    service.change_tick_sound(True)
+    assert make_service().tick_sound_enabled
+    service.change_tick_sound(False)
+    assert not make_service().tick_sound_enabled
+    with wave.open(str(service.tick_sound_path), "rb") as sound:
+        assert sound.getnframes() == sound.getframerate()
+
+
 def test_alarm_keeps_ringing_until_stopped(monkeypatch):
     service = make_service()
     playback = queue.Queue()
