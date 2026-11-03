@@ -19,13 +19,16 @@ def test_subject_popup_scaled_rows_and_mouse_selection():
     app = ctk.CTk()
     app.geometry("700x700+20+20")
     context_calls = []
+    subject = gui.SubjectOptionMenu(
+        app, values=config.SUBJECT_OPTIONS,
+        context_command=lambda *args: context_calls.append(args))
+    subject.pack()
 
     def check_scale(scale):
+        # Reuse the live control across DPI changes, as in the application.
+        # Destroyed CTk dropdowns can retain callbacks in the scaling tracker.
         ctk.set_widget_scaling(scale)
-        subject = gui.SubjectOptionMenu(
-            app, values=config.SUBJECT_OPTIONS,
-            context_command=lambda *args: context_calls.append(args))
-        subject.pack()
+        subject.set("Umum")
         app.update()
         subject._text_label.event_generate("<Button-1>", x=10, y=10)
         app.update()
@@ -37,8 +40,9 @@ def test_subject_popup_scaled_rows_and_mouse_selection():
             assert row.winfo_rooty() + row.winfo_height() <= popup.winfo_rooty() + popup.winfo_height()
         english = subject.subject_rows["English"]._text_label
         english.event_generate("<Enter>")
+        # CTkButton invokes its command on mouse press, which destroys the popup.
+        # A release event cannot be sent to the now-destroyed row widget.
         english.event_generate("<Button-1>", x=5, y=5)
-        english.event_generate("<ButtonRelease-1>", x=5, y=5)
         app.update()
         assert subject.get() == "English"
         assert subject.subject_popup is None
@@ -50,7 +54,6 @@ def test_subject_popup_scaled_rows_and_mouse_selection():
         assert subject.get() == "English"
         assert subject.subject_popup is not None
         subject.close_subject_popup()
-        subject.destroy()
 
     try:
         for scale in (1.0, 1.5, 2.0):
