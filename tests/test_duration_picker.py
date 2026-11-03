@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import customtkinter as ctk
 import pytest
 
-from study_timer import config
-from study_timer.ui.duration_picker import DurationPicker
+from focus_timer import config
+from focus_timer.ui.duration_picker import DurationPicker
 
 
 @pytest.fixture(scope="module")

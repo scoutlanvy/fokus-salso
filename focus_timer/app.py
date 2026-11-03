@@ -3,9 +3,9 @@
 import customtkinter as ctk
 from tkinter import messagebox
 
-from study_timer import config
-from study_timer.instance_lock import InstanceLock, AlreadyRunningError
-from study_timer.ui.main_window import build_main_window
+from focus_timer import config
+from focus_timer.instance_lock import InstanceLock, AlreadyRunningError
+from focus_timer.ui.main_window import build_main_window
 
 
 def run_app() -> None:

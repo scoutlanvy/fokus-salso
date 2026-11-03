@@ -5,11 +5,11 @@ from contextlib import closing, contextmanager
 from datetime import datetime
 from typing import List, Tuple
 
-from study_timer import config
+from focus_timer import config
 from zoneinfo import ZoneInfo
 
-from study_timer.models import ActiveTimer
-from study_timer.schema import ensure_schema
+from focus_timer.models import ActiveTimer
+from focus_timer.schema import ensure_schema
 
 
 FOCUS_SCOPES = ("shared", "per_subject")

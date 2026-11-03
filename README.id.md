@@ -1,8 +1,14 @@
-# Study Timer
+# FokusSaldo
 
 [English](README.md) | **Bahasa Indonesia**
 
-Aplikasi desktop Windows untuk mencatat waktu belajar dengan timer manual dan Pomodoro. Riwayat disimpan secara lokal menggunakan SQLite, tanpa koneksi ke layanan eksternal. Antarmuka aplikasi menggunakan bahasa Inggris.
+**Timer belajar offline dengan Pomodoro, saldo istirahat, dan pelacakan per subjek.**
+
+Aplikasi desktop Windows untuk mencatat waktu belajar dengan timer manual dan Pomodoro. Aplikasi menyimpan saldo istirahat, melacak progres per subjek, dan menyimpan riwayat sesi secara lokal dengan SQLite tanpa koneksi ke layanan eksternal. Antarmuka aplikasi menggunakan bahasa Inggris.
+
+Proyek ini menerima kontribusi publik. Kode dilisensikan di bawah
+[MIT License](LICENSE); lihat [CONTRIBUTING.md](CONTRIBUTING.md) untuk panduan
+melaporkan masalah dan mengirim pull request.
 
 ## Fitur
 
@@ -121,17 +127,17 @@ Lihat [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) untuk rincian teknis dan [AGENT
 
 `main.py` tetap menjadi entry point untuk PowerShell, kedua launcher VBS, dan
 pintasan lokal. Launcher tetap berada di root bersama `.venv` dan `timer.ico`.
-Package `study_timer/` harus ikut disalin ketika memindahkan proyek.
+Package `focus_timer/` harus ikut disalin ketika memindahkan proyek.
 
-- `study_timer/app.py`: startup dan mutex per database.
-- `study_timer/ui/`: jendela utama, dialog, dropdown subjek, input durasi, dan history.
-- `study_timer/timer_service.py`: countdown, transisi fase, recovery, dan retry.
-- `study_timer/audio.py` dan `study_timer/assets/`: playback dan audio bawaan.
-- `study_timer/models.py`: model checkpoint timer.
-- `study_timer/session_repository.py`: query dan transaksi SQLite.
-- `study_timer/schema.py`: pembuatan schema serta migrasi dalam transaksi repository.
-- `study_timer/subject_store.py`: penyimpanan daftar subjek JSON.
-- `study_timer/config.py` dan `study_timer/instance_lock.py`: konfigurasi dan mutex Windows.
+- `focus_timer/app.py`: startup dan mutex per database.
+- `focus_timer/ui/`: jendela utama, dialog, dropdown subjek, input durasi, dan history.
+- `focus_timer/timer_service.py`: countdown, transisi fase, recovery, dan retry.
+- `focus_timer/audio.py` dan `focus_timer/assets/`: playback dan audio bawaan.
+- `focus_timer/models.py`: model checkpoint timer.
+- `focus_timer/session_repository.py`: query dan transaksi SQLite.
+- `focus_timer/schema.py`: pembuatan schema serta migrasi dalam transaksi repository.
+- `focus_timer/subject_store.py`: penyimpanan daftar subjek JSON.
+- `focus_timer/config.py` dan `focus_timer/instance_lock.py`: konfigurasi dan mutex Windows.
 
 Pemindahan kode tidak memindahkan database atau `subjects.json` pengguna.
-Import kode pengembangan sekarang menggunakan namespace `study_timer`.
+Import kode pengembangan sekarang menggunakan namespace `focus_timer`.

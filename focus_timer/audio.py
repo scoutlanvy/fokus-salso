@@ -9,7 +9,7 @@ import winsound
 from array import array
 from pathlib import Path
 
-from study_timer import config
+from focus_timer import config
 
 
 ALARM_SOUND_PATH = config.ASSET_DIRECTORY / "alarm.wav"

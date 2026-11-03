@@ -37,7 +37,7 @@ MAX_HOURS = 99
 MAX_MINUTES = 59
 MAX_SECONDS = 59
 
-APP_TITLE = "Timer - TEST MODE" if PREVIEW_MODE else "Timer"
+APP_TITLE = "FokusSaldo - TEST MODE" if PREVIEW_MODE else "FokusSaldo"
 ASSET_DIRECTORY = Path(__file__).resolve().parent / "assets"
 APP_ICON = Path(__file__).resolve().parent.parent / "timer.ico"
 WINDOW_SIZE = "900x620"

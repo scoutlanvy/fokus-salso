@@ -1,4 +1,4 @@
-from study_timer.app import run_app
+from focus_timer.app import run_app
 
 
 if __name__ == "__main__":

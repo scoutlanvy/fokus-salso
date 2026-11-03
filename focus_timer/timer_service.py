@@ -5,15 +5,15 @@ from dataclasses import replace
 from uuid import uuid4
 from typing import Callable, Optional
 
-from study_timer import config
-from study_timer.session_repository import (
+from focus_timer import config
+from focus_timer.session_repository import (
     save_session, get_pomodoro_state, complete_pomodoro_focus, consume_break_second,
     load_active_timer, save_active_timer, clear_active_timer, reset_active_timer,
     get_focus_progress, get_focus_scope, set_focus_scope, get_tick_sound, set_tick_sound, get_tick_volume,
 )
 
-from study_timer.models import ActiveTimer
-from study_timer.audio import AudioPlayer
+from focus_timer.models import ActiveTimer
+from focus_timer.audio import AudioPlayer
 
 
 Callback = Callable[[str], None]

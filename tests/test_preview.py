@@ -10,10 +10,10 @@ def test_preview_uses_short_durations_and_separate_storage(tmp_path):
 from pathlib import Path
 import os
 import customtkinter as ctk
-from study_timer import config
-from study_timer.ui import main_window as gui
-from study_timer.app import run_app
-from study_timer import session_repository as repository
+from focus_timer import config
+from focus_timer.ui import main_window as gui
+from focus_timer.app import run_app
+from focus_timer import session_repository as repository
 assert config.PREVIEW_MODE
 assert config.POMODORO_FOCUS_SECONDS == 10
 assert config.POMODORO_SHORT_BREAK_SECONDS == 5

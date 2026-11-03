@@ -2,7 +2,7 @@ from typing import Optional
 
 import customtkinter as ctk
 
-from study_timer import config
+from focus_timer import config
 
 
 DRAG_PIXELS_PER_STEP = 10

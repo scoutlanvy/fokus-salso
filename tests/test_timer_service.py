@@ -7,11 +7,11 @@ from array import array
 
 import pytest
 
-from study_timer import config
-from study_timer import audio
-from study_timer import timer_service
-from study_timer import session_repository as repository
-from study_timer.timer_service import TimerService
+from focus_timer import config
+from focus_timer import audio
+from focus_timer import timer_service
+from focus_timer import session_repository as repository
+from focus_timer.timer_service import TimerService
 
 
 @pytest.fixture(autouse=True)

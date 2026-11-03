@@ -6,13 +6,13 @@ from types import SimpleNamespace
 
 import customtkinter as ctk
 
-from study_timer import config
-from study_timer.ui import main_window as gui
-from study_timer.app import run_app
-from study_timer import session_repository as repository
-from study_timer import audio
-from study_timer import timer_service
-from study_timer import subject_store
+from focus_timer import config
+from focus_timer.ui import main_window as gui
+from focus_timer.app import run_app
+from focus_timer import session_repository as repository
+from focus_timer import audio
+from focus_timer import timer_service
+from focus_timer import subject_store
 
 
 def test_subject_popup_scaled_rows_and_mouse_selection():

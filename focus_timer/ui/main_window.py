@@ -2,13 +2,13 @@ import customtkinter as ctk
 import queue
 from tkinter import Menu, messagebox
 
-from study_timer import config
-from study_timer.ui.duration_picker import DurationPicker
-from study_timer.ui.history_panel import HistoryPanel
-from study_timer.timer_service import TimerService
-from study_timer.ui.subject_menu import SubjectOptionMenu
-from study_timer.ui.dialogs import create_settings_dialog, create_break_duration_dialog
-from study_timer import subject_store
+from focus_timer import config
+from focus_timer.ui.duration_picker import DurationPicker
+from focus_timer.ui.history_panel import HistoryPanel
+from focus_timer.timer_service import TimerService
+from focus_timer.ui.subject_menu import SubjectOptionMenu
+from focus_timer.ui.dialogs import create_settings_dialog, create_break_duration_dialog
+from focus_timer import subject_store
 
 
 def build_main_window() -> None:
@@ -437,7 +437,7 @@ def build_main_window() -> None:
 
     header_label = ctk.CTkLabel(
         header_frame,
-        text="⏱️ Timer",
+        text="⏱️ FokusSaldo",
         font=("Helvetica", 22, "bold"),
     )
     header_label.pack(side="left", expand=True)

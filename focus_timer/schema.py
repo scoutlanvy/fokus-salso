@@ -3,8 +3,8 @@
 import json
 import sqlite3
 
-from study_timer import config
-from study_timer.models import ActiveTimer
+from focus_timer import config
+from focus_timer.models import ActiveTimer
 
 
 def _create_progress_tables(connection):

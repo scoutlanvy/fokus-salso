@@ -1,0 +1,1 @@
+"""FokusSaldo desktop study timer."""

@@ -20,8 +20,8 @@ import sys
 project = Path(sys.argv[1])
 sys.path.insert(0, str(project))
 import customtkinter as ctk
-from study_timer import config
-from study_timer import session_repository as repository
+from focus_timer import config
+from focus_timer import session_repository as repository
 
 expected_directory = Path(os.environ['LOCALAPPDATA']) / (
     'StudyTimerPreview' if config.PREVIEW_MODE else 'StudyTimer')

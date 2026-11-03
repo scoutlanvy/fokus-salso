@@ -1,8 +1,13 @@
-# Study Timer
+# FokusSaldo
 
 **English** | [Bahasa Indonesia](README.id.md)
 
-A Windows desktop application for tracking study time with a manual timer and Pomodoro sessions. History is stored locally in SQLite, with no connection to external services. The application interface is in English.
+**Offline study timer with Pomodoro, break balance, and subject tracking.**
+
+A Windows desktop application for tracking study time with a manual timer and Pomodoro sessions. It keeps a persistent break balance, tracks progress by subject, and stores session history locally in SQLite without connecting to external services. The application interface is in English.
+
+Licensed under the [MIT License](LICENSE). Contributions are welcome; see
+[CONTRIBUTING.md](CONTRIBUTING.md) for issue and pull request guidance.
 
 ## Features
 
@@ -112,16 +117,16 @@ See [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) for technical details and [AGENTS
 
 ## Code structure
 
-`main.py` remains the entry point for PowerShell, both VBS launchers, and local shortcuts. Keep the launchers in the root alongside `.venv` and `timer.ico`. Include the `study_timer/` package when copying the project.
+`main.py` remains the entry point for PowerShell, both VBS launchers, and local shortcuts. Keep the launchers in the root alongside `.venv` and `timer.ico`. Include the `focus_timer/` package when copying the project.
 
-- `study_timer/app.py`: startup and per-database mutex.
-- `study_timer/ui/`: main window, dialogs, subject dropdown, duration input, and history.
-- `study_timer/timer_service.py`: countdown, phase transitions, recovery, and retries.
-- `study_timer/audio.py` and `study_timer/assets/`: playback and bundled audio.
-- `study_timer/models.py`: timer checkpoint model.
-- `study_timer/session_repository.py`: SQLite queries and transactions.
-- `study_timer/schema.py`: schema setup and migrations within repository transactions.
-- `study_timer/subject_store.py`: JSON subject-list persistence.
-- `study_timer/config.py` and `study_timer/instance_lock.py`: configuration and Windows mutex.
+- `focus_timer/app.py`: startup and per-database mutex.
+- `focus_timer/ui/`: main window, dialogs, subject dropdown, duration input, and history.
+- `focus_timer/timer_service.py`: countdown, phase transitions, recovery, and retries.
+- `focus_timer/audio.py` and `focus_timer/assets/`: playback and bundled audio.
+- `focus_timer/models.py`: timer checkpoint model.
+- `focus_timer/session_repository.py`: SQLite queries and transactions.
+- `focus_timer/schema.py`: schema setup and migrations within repository transactions.
+- `focus_timer/subject_store.py`: JSON subject-list persistence.
+- `focus_timer/config.py` and `focus_timer/instance_lock.py`: configuration and Windows mutex.
 
-The code reorganization does not relocate user databases or `subjects.json`. Development imports use the `study_timer` namespace.
+The code reorganization does not relocate user databases or `subjects.json`. Development imports use the `focus_timer` namespace.
