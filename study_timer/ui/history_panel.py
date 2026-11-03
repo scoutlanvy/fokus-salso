@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 from typing import List, Tuple
 
-from session_repository import get_recent_sessions, get_summary_by_subject
+from study_timer.session_repository import get_recent_sessions, get_summary_by_subject
 
 
 def format_duration(total_seconds: int) -> str:

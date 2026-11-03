@@ -6,11 +6,13 @@ from types import SimpleNamespace
 
 import customtkinter as ctk
 
-import config
-import gui
-import session_repository as repository
-import timer_service
-import subject_store
+from study_timer import config
+from study_timer.ui import main_window as gui
+from study_timer.app import run_app
+from study_timer import session_repository as repository
+from study_timer import audio
+from study_timer import timer_service
+from study_timer import subject_store
 
 
 def test_subject_popup_scaled_rows_and_mouse_selection():
@@ -163,7 +165,7 @@ def test_subject_native_context_menu_lifecycle():
 def test_gui_delete_subject(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *_: None)
     repository.reset_active_timer(repository.ActiveTimer(
         "partial-english", "Pomodoro", "English", "focus", 1500, 900, True))
     history = repository.get_summary_by_subject()
@@ -318,13 +320,13 @@ def test_gui_delete_subject(tmp_path, monkeypatch):
             app.tk.call(app.protocol("WM_DELETE_WINDOW"))
 
     monkeypatch.setattr(ctk.CTk, "mainloop", inspect)
-    gui.run_app()
+    run_app()
 
 
 def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *_: None)
     monkeypatch.setattr(timer_service, "time", SimpleNamespace(monotonic=lambda: time.monotonic() * 20))
     repository.complete_pomodoro_focus("Umum", 1500)
     instances = []
@@ -555,13 +557,13 @@ def test_gui_choices_custom_duration_idle_break_and_ui_thread(tmp_path, monkeypa
                 app.destroy()
 
     monkeypatch.setattr(ctk.CTk, "mainloop", inspect)
-    gui.run_app()
+    run_app()
 
 
 def test_gui_subject_accumulation_and_read_retry(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *_: None)
     repository.reset_active_timer(repository.ActiveTimer(
         "partial-umum", "Pomodoro", "Umum", "focus", 1500, 607, True))
     errors = []
@@ -625,4 +627,4 @@ def test_gui_subject_accumulation_and_read_retry(tmp_path, monkeypatch):
             app.tk.call(app.protocol("WM_DELETE_WINDOW"))
 
     monkeypatch.setattr(ctk.CTk, "mainloop", inspect)
-    gui.run_app()
+    run_app()

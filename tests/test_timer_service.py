@@ -7,15 +7,16 @@ from array import array
 
 import pytest
 
-import config
-import timer_service
-import session_repository as repository
-from timer_service import TimerService
+from study_timer import config
+from study_timer import audio
+from study_timer import timer_service
+from study_timer import session_repository as repository
+from study_timer.timer_service import TimerService
 
 
 @pytest.fixture(autouse=True)
 def silent_alarm(monkeypatch, tmp_path):
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *_: None)
     monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
 
@@ -30,7 +31,7 @@ def test_tick_volume_scales_audio_and_persists_without_changing_timing(volume, m
     reopened = None
     try:
         service.change_focus_scope("shared", "Umum", True, volume)
-        with wave.open(str(service._tick_source_path), "rb") as source:
+        with wave.open(str(service.audio.tick_source_path), "rb") as source:
             params = source.getparams()
             original = array("h", source.readframes(source.getnframes()))
         with wave.open(str(service.tick_sound_path), "rb") as scaled:
@@ -38,13 +39,13 @@ def test_tick_volume_scales_audio_and_persists_without_changing_timing(volume, m
             actual = array("h", scaled.readframes(scaled.getnframes()))
         assert actual == array("h", (round(sample * volume / 100) for sample in original))
         playback = []
-        monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: playback.append(args))
+        monkeypatch.setattr(audio.winsound, "PlaySound", lambda *args: playback.append(args))
         service._play_tick()
         if volume == 0:
             assert not playback
         else:
             assert playback[0][0] == str(service.tick_sound_path)
-            assert not playback[0][1] & timer_service.winsound.SND_LOOP
+            assert not playback[0][1] & audio.winsound.SND_LOOP
         reopened = make_service()
         assert reopened.tick_volume == volume
         assert reopened.tick_sound_enabled
@@ -106,12 +107,12 @@ def test_tick_starts_immediately_and_stops_on_pause_reset(monkeypatch):
     service = make_service()
     service.change_tick_sound(True)
     playback = queue.Queue()
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: playback.put(args))
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *args: playback.put(args))
     service.start_timer(30, "Umum")
     try:
         sound, flags = playback.get(timeout=0.8)
         assert sound == str(service.tick_sound_path)
-        assert not flags & timer_service.winsound.SND_LOOP
+        assert not flags & audio.winsound.SND_LOOP
         assert service.remaining_seconds == 30
         service.pause_timer()
         assert playback.get(timeout=0.8) == (None, 0)
@@ -158,7 +159,7 @@ def test_tick_matches_displayed_seconds_even_when_storage_is_slow(monkeypatch):
 
     service.set_countdown = displayed.append
     monkeypatch.setattr(service, "_checkpoint", slow_checkpoint)
-    monkeypatch.setattr(timer_service.winsound, "PlaySound",
+    monkeypatch.setattr(audio.winsound, "PlaySound",
                         lambda sound, flags: playback.put((sound, flags, displayed[-1])))
     service.start_timer(30, "Umum")
     try:
@@ -170,7 +171,7 @@ def test_tick_matches_displayed_seconds_even_when_storage_is_slow(monkeypatch):
         release_save.set()
         sound, flags, value = playback.get(timeout=1)
         assert sound == str(service.tick_sound_path)
-        assert not flags & timer_service.winsound.SND_LOOP
+        assert not flags & audio.winsound.SND_LOOP
         assert value == "00:00:29"
     finally:
         release_save.set()
@@ -180,15 +181,15 @@ def test_tick_matches_displayed_seconds_even_when_storage_is_slow(monkeypatch):
 def test_alarm_keeps_ringing_until_stopped(monkeypatch):
     service = make_service()
     playback = queue.Queue()
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: playback.put(args))
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *args: playback.put(args))
     worker = threading.Thread(target=service._beep, daemon=True)
     worker.start()
     try:
         sound, flags = playback.get(timeout=2)
-        assert sound == str(timer_service.ALARM_SOUND_PATH)
-        assert flags & timer_service.winsound.SND_LOOP
-        assert flags & timer_service.winsound.SND_ASYNC
-        assert flags & timer_service.winsound.SND_FILENAME
+        assert sound == str(audio.ALARM_SOUND_PATH)
+        assert flags & audio.winsound.SND_LOOP
+        assert flags & audio.winsound.SND_ASYNC
+        assert flags & audio.winsound.SND_FILENAME
         assert worker.is_alive()
         assert service.is_alarm_active
         service.stop_alarm()
@@ -319,7 +320,7 @@ def test_alarm_cannot_be_paused_or_skipped():
 def test_cancelled_timer_does_not_start_alarm(monkeypatch):
     service = make_service()
     sounds = []
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: sounds.append(args))
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *args: sounds.append(args))
     service.reset_timer()
     sounds.clear()
     service._beep()
@@ -330,7 +331,7 @@ def test_cancelled_timer_does_not_start_alarm(monkeypatch):
 def test_stop_alarm_stops_audio_before_returning(monkeypatch):
     service = make_service()
     calls = []
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: calls.append(args))
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *args: calls.append(args))
     service.is_alarm_active = True
     service.stop_alarm()
     # No worker needs to wake or finish a beep for Windows to receive the stop.
@@ -341,7 +342,7 @@ def test_stop_alarm_stops_audio_before_returning(monkeypatch):
 def test_stop_before_playback_starts_does_not_restart_sound(monkeypatch):
     service = make_service()
     calls = []
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *args: calls.append(args))
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *args: calls.append(args))
     service.update_control_state = lambda *args: service.stop_alarm()
     service._beep()
     assert calls
@@ -350,7 +351,7 @@ def test_stop_before_playback_starts_does_not_restart_sound(monkeypatch):
 
 
 def test_bundled_alarm_is_a_valid_short_wav():
-    with wave.open(str(timer_service.ALARM_SOUND_PATH), "rb") as sound:
+    with wave.open(str(audio.ALARM_SOUND_PATH), "rb") as sound:
         assert sound.getnchannels() == 1
         assert sound.getsampwidth() == 2
         assert 0.34 < sound.getnframes() / sound.getframerate() < 0.36

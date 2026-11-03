@@ -1,8 +1,8 @@
 import pytest
 import json
 
-import config
-import subject_store
+from study_timer import config
+from study_timer import subject_store
 
 
 def test_subjects_persist_and_duplicates_select_existing(tmp_path, monkeypatch):

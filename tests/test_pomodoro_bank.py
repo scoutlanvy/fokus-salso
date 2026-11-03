@@ -6,17 +6,18 @@ from types import SimpleNamespace
 
 import pytest
 
-import config
-import session_repository as repository
-import timer_service
-from timer_service import TimerService
+from study_timer import config
+from study_timer import session_repository as repository
+from study_timer import audio
+from study_timer import timer_service
+from study_timer.timer_service import TimerService
 
 
 @pytest.fixture(autouse=True)
 def isolated_bank(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *_: None)
 
 
 def wait_for(predicate):

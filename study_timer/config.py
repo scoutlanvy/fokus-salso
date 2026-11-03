@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+
 TIMEZONE = "Asia/Jakarta"
 PREVIEW_MODE = os.environ.get("STUDY_TIMER_PREVIEW") == "1"
 DATA_DIRECTORY = Path(os.environ.get("LOCALAPPDATA", Path.home())) / (
@@ -37,7 +38,8 @@ MAX_MINUTES = 59
 MAX_SECONDS = 59
 
 APP_TITLE = "Timer - TEST MODE" if PREVIEW_MODE else "Timer"
-APP_ICON = Path(__file__).resolve().with_name("timer.ico")
+ASSET_DIRECTORY = Path(__file__).resolve().parent / "assets"
+APP_ICON = Path(__file__).resolve().parent.parent / "timer.ico"
 WINDOW_SIZE = "900x620"
 WINDOW_RESIZABLE = True
 

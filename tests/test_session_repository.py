@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 import sqlite3
 
-import config
-import session_repository
+from study_timer import config
+from study_timer import session_repository
 
 
 def test_save_session_creates_database_and_stores_session(tmp_path, monkeypatch):

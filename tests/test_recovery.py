@@ -12,19 +12,21 @@ from uuid import uuid4
 import customtkinter as ctk
 import pytest
 
-import config
-import gui
-from instance_lock import AlreadyRunningError, InstanceLock
-import session_repository as repository
-import timer_service
-from timer_service import TimerService
+from study_timer import config
+from study_timer.ui import main_window as gui
+from study_timer.app import run_app
+from study_timer.instance_lock import AlreadyRunningError, InstanceLock
+from study_timer import session_repository as repository
+from study_timer import audio
+from study_timer import timer_service
+from study_timer.timer_service import TimerService
 
 
 @pytest.fixture(autouse=True)
 def isolated_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIRECTORY", tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", tmp_path / "sessions.sqlite3")
-    monkeypatch.setattr(timer_service.winsound, "PlaySound", lambda *_: None)
+    monkeypatch.setattr(audio.winsound, "PlaySound", lambda *_: None)
 
 
 def snapshot(phase="focus", remaining=1492, total=1500, return_to_choice=True):
@@ -325,9 +327,10 @@ def test_gui_restores_controls_and_reset(phase, remaining, return_to_choice, exp
     repository.save_active_timer(saved)
     script = """
 import customtkinter as ctk
-import gui
-import session_repository as repository
-from timer_service import TimerService
+from study_timer.ui import main_window as gui
+from study_timer.app import run_app
+from study_timer import session_repository as repository
+from study_timer.timer_service import TimerService
 saved = repository.load_active_timer()
 expected = 'Start' if saved.phase == 'done' else (
     'Continue Focus' if saved.phase == 'choice' or (saved.phase == 'break' and not saved.remaining_seconds)
@@ -385,7 +388,7 @@ def inspect(app):
     finally:
         app.tk.call(app.protocol('WM_DELETE_WINDOW'))
 ctk.CTk.mainloop = inspect
-gui.run_app()
+run_app()
 """
     process = child_process(script, tmp_path)
     stdout, stderr = process.communicate(timeout=10)
@@ -750,9 +753,11 @@ def test_gui_close_failure_keeps_window_open(tmp_path):
     script = """
 import sqlite3
 import customtkinter as ctk
-import gui
-import timer_service
-import session_repository as repository
+from study_timer.ui import main_window as gui
+from study_timer.app import run_app
+from study_timer import audio
+from study_timer import timer_service
+from study_timer import session_repository as repository
 saved = repository.load_active_timer()
 gui.messagebox.showerror = lambda *a, **kw: None
 def inspect(app):
@@ -769,7 +774,7 @@ def inspect(app):
         timer_service.save_active_timer = original
         app.tk.call(close)
 ctk.CTk.mainloop = inspect
-gui.run_app()
+run_app()
 """
     process = child_process(script, tmp_path)
     stdout, stderr = process.communicate(timeout=10)
@@ -782,7 +787,7 @@ def child_process(script, tmp_path):
 import os
 from pathlib import Path
 import time
-import config
+from study_timer import config
 config.DATA_DIRECTORY = Path(os.environ['RECOVERY_TEST_DIR'])
 config.DATABASE_PATH = config.DATA_DIRECTORY / 'sessions.sqlite3'
 """
@@ -795,10 +800,11 @@ def test_gui_settings_save_cancel_failure_and_active_lock(tmp_path):
     script = """
 import sqlite3
 import customtkinter as ctk
-import gui
-import timer_service
-import session_repository as repo
-
+from study_timer.ui import main_window as gui
+from study_timer.app import run_app
+from study_timer import audio
+from study_timer import timer_service
+from study_timer import session_repository as repo
 repo.reset_active_timer(repo.ActiveTimer('shared-seven', 'Pomodoro', 'Umum', 'focus', 1500, 1080))
 services = []
 original_service = gui.TimerService
@@ -808,7 +814,7 @@ def factory(*args, **kwargs):
     return instance
 gui.TimerService = factory
 gui.messagebox.showerror = lambda *a, **kw: None
-timer_service.winsound.PlaySound = lambda *a: None
+audio.winsound.PlaySound = lambda *a: None
 
 def inspect(app):
     def descendants(parent):
@@ -906,7 +912,7 @@ def inspect(app):
     finally:
         app.tk.call(app.protocol('WM_DELETE_WINDOW'))
 ctk.CTk.mainloop = inspect
-gui.run_app()
+run_app()
 """
     process = child_process(script, tmp_path)
     stdout, stderr = process.communicate(timeout=20)
@@ -915,7 +921,7 @@ gui.run_app()
 
 def test_running_process_crash_restores_last_durable_second(tmp_path):
     process = child_process("""
-from timer_service import TimerService
+from study_timer.timer_service import TimerService
 timer = TimerService(lambda _: None, lambda _: None, lambda *a, **kw: None)
 timer.start_timer(100, 'English')
 while timer.remaining_seconds != 99:
@@ -953,7 +959,7 @@ def test_crash_after_transaction_does_not_repeat_completion_or_debit(tmp_path, p
     if phase == "break":
         repository.complete_pomodoro_focus("Umum", 1500)
     process = child_process("""
-import session_repository as repo
+from study_timer import session_repository as repo
 from dataclasses import replace
 timer = repo.load_active_timer()
 if timer.phase == 'focus':
@@ -986,9 +992,9 @@ def test_preview_recovery_does_not_touch_normal_database(tmp_path):
     repository.save_active_timer(saved)
     environment = dict(os.environ, LOCALAPPDATA=str(tmp_path), STUDY_TIMER_PREVIEW="1")
     script = """
-import config
-import session_repository as repo
-from timer_service import TimerService
+from study_timer import config
+from study_timer import session_repository as repo
+from study_timer.timer_service import TimerService
 timer = repo.ActiveTimer('preview-session', 'Pomodoro', 'Umum', 'focus', 10, 7, True)
 repo.save_active_timer(timer)
 service = TimerService(lambda _: None, lambda _: None, lambda *a, **kw: None)
@@ -1008,7 +1014,7 @@ assert repo.load_active_timer() == timer
 
 def test_instance_lock_rejects_second_process_and_releases_after_crash(tmp_path):
     process = child_process("""
-from instance_lock import InstanceLock
+from study_timer.instance_lock import InstanceLock
 with InstanceLock(config.DATABASE_PATH):
     (config.DATA_DIRECTORY / 'locked').touch()
     time.sleep(30)

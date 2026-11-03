@@ -1,25 +1,23 @@
 import sqlite3
 import threading
 import time
-import winsound
-import tempfile
-import wave
-from array import array
 from dataclasses import replace
 from uuid import uuid4
-from pathlib import Path
 from typing import Callable, Optional
 
-import config
-from session_repository import (
+from study_timer import config
+from study_timer.session_repository import (
     save_session, get_pomodoro_state, complete_pomodoro_focus, consume_break_second,
-    ActiveTimer, load_active_timer, save_active_timer, clear_active_timer, reset_active_timer,
+    load_active_timer, save_active_timer, clear_active_timer, reset_active_timer,
     get_focus_progress, get_focus_scope, set_focus_scope, get_tick_sound, set_tick_sound, get_tick_volume,
 )
 
+from study_timer.models import ActiveTimer
+from study_timer.audio import AudioPlayer
+
+
 Callback = Callable[[str], None]
 ControlStateCallback = Callable[[bool, bool, bool], None]
-ALARM_SOUND_PATH = Path(__file__).with_name("alarm.wav")
 
 
 class TimerService:
@@ -55,11 +53,9 @@ class TimerService:
         self._storage_retry = False
         self.focus_scope = "shared"
         self.tick_sound_enabled = False
-        self.tick_sound_path = Path(__file__).with_name("tick.wav")
+        self.audio = AudioPlayer()
+        self.tick_sound_path = self.audio.tick_source_path
         self.tick_volume = 100
-        self._tick_source_path = self.tick_sound_path
-        self._tick_audio_paths = {100: self.tick_sound_path}
-        self._tick_audio_directory = None
         self._tick_playing = False
         self.focus_read_failed = False
         self.storage_blocked = not self._load_balance()
@@ -103,7 +99,7 @@ class TimerService:
                 raise ValueError("Settings can only change while the timer is idle and storage is available.")
             audio_path = self.tick_sound_path
             if tick_volume is not None:
-                audio_path = self._prepare_tick_audio(tick_volume)
+                audio_path = self.audio.prepare_tick(tick_volume)
             progress = set_focus_scope(scope, subject, tick_sound=tick_sound, tick_volume=tick_volume)
             self.focus_scope = scope
             if tick_sound is not None:
@@ -113,26 +109,6 @@ class TimerService:
                 self.tick_sound_path = audio_path
             return config.POMODORO_FOCUS_SECONDS - progress
 
-    def _prepare_tick_audio(self, volume):
-        """Scale PCM once while idle; keep playback timing and the silent tail."""
-        if type(volume) is not int or not 0 <= volume <= 400:
-            raise ValueError("Tick volume must be between 0 and 400")
-        if volume in self._tick_audio_paths:
-            return self._tick_audio_paths[volume]
-        with wave.open(str(self._tick_source_path), "rb") as sound:
-            params = sound.getparams()
-            if params.sampwidth != 2 or params.comptype != "NONE":
-                raise ValueError("Tick audio must be 16-bit PCM")
-            samples = array("h", sound.readframes(sound.getnframes()))
-        scaled = array("h", (max(-32768, min(32767, round(sample * volume / 100))) for sample in samples))
-        if self._tick_audio_directory is None:
-            self._tick_audio_directory = tempfile.TemporaryDirectory(prefix="timer-tick-volume-")
-        path = Path(self._tick_audio_directory.name) / f"tick-{volume}.wav"
-        with wave.open(str(path), "wb") as sound:
-            sound.setparams(params)
-            sound.writeframes(scaled.tobytes())
-        self._tick_audio_paths[volume] = path
-        return path
 
     def change_tick_sound(self, enabled):
         with self._command_lock:
@@ -221,10 +197,7 @@ class TimerService:
             self.stop_alarm()
         if self.timer_thread is not None:
             self.timer_thread.join()
-        if self._tick_audio_directory is not None:
-            self._tick_audio_directory.cleanup()
-            self._tick_audio_directory = None
-            self._tick_audio_paths = {100: self._tick_source_path}
+        self.audio.cleanup()
         return True
 
     def _load_balance(self) -> bool:
@@ -232,7 +205,7 @@ class TimerService:
             balance, position = get_pomodoro_state()
             scope = get_focus_scope()
             volume = get_tick_volume()
-            audio_path = self._prepare_tick_audio(volume)
+            audio_path = self.audio.prepare_tick(volume)
             self.tick_sound_enabled = get_tick_sound()
             self.tick_volume = volume
             self.tick_sound_path = audio_path
@@ -299,21 +272,18 @@ class TimerService:
         try:
             with self._alarm_lock:
                 if not self.stop_event.is_set() and not self.alarm_stop_event.is_set():
-                    winsound.PlaySound(
-                        str(ALARM_SOUND_PATH),
-                        winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_LOOP,
-                    )
+                    self.audio.play_alarm()
             while not self.stop_event.is_set() and not self.alarm_stop_event.wait(0.05):
                 pass
         finally:
             with self._alarm_lock:
-                winsound.PlaySound(None, 0)
+                self.audio.stop()
                 self.is_alarm_active = False
 
     def stop_alarm(self) -> None:
         with self._alarm_lock:
             self.alarm_stop_event.set()
-            winsound.PlaySound(None, 0)
+            self.audio.stop()
             self._tick_playing = False
 
     def _play_tick(self):
@@ -321,14 +291,13 @@ class TimerService:
             if (self.tick_sound_enabled and self.tick_volume > 0
                     and not self.pause_event.is_set() and not self.stop_event.is_set()
                     and not self.is_alarm_active):
-                winsound.PlaySound(str(self.tick_sound_path),
-                                   winsound.SND_FILENAME | winsound.SND_ASYNC)
+                self.audio.play_tick(self.tick_sound_path)
                 self._tick_playing = True
 
     def _stop_tick(self):
         with self._alarm_lock:
             if self._tick_playing:
-                winsound.PlaySound(None, 0)
+                self.audio.stop()
                 self._tick_playing = False
 
     def _run_countdown(

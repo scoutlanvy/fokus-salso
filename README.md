@@ -18,7 +18,7 @@ Gunakan Windows dengan Python 3.9 atau lebih baru beserta Tkinter. Jalankan peri
 
 ```powershell
 py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install customtkinter tzdata
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 `tzdata` menyediakan data zona waktu untuk pencatatan sesi dalam `Asia/Jakarta`.
@@ -107,10 +107,29 @@ Hanya satu jendela diizinkan untuk setiap database. Aplikasi normal dan mode per
 Pasang pytest, lalu jalankan pengujian dari folder proyek:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install pytest
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
 Sebagian pengujian membuka jendela GUI sementara, sehingga membutuhkan sesi desktop Windows.
 
 Lihat [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) untuk rincian teknis dan [AGENTS.md](AGENTS.md) untuk panduan kerja AI.
+
+## Struktur kode
+
+`main.py` tetap menjadi entry point untuk PowerShell, kedua launcher VBS, dan
+pintasan lokal. Launcher tetap berada di root bersama `.venv` dan `timer.ico`.
+Package `study_timer/` harus ikut disalin ketika memindahkan proyek.
+
+- `study_timer/app.py`: startup dan mutex per database.
+- `study_timer/ui/`: jendela utama, dialog, dropdown subjek, input durasi, dan history.
+- `study_timer/timer_service.py`: countdown, transisi fase, recovery, dan retry.
+- `study_timer/audio.py` dan `study_timer/assets/`: playback dan audio bawaan.
+- `study_timer/models.py`: model checkpoint timer.
+- `study_timer/session_repository.py`: query dan transaksi SQLite.
+- `study_timer/schema.py`: pembuatan schema serta migrasi dalam transaksi repository.
+- `study_timer/subject_store.py`: penyimpanan daftar subjek JSON.
+- `study_timer/config.py` dan `study_timer/instance_lock.py`: konfigurasi dan mutex Windows.
+
+Pemindahan kode tidak memindahkan database atau `subjects.json` pengguna.
+Import kode pengembangan sekarang menggunakan namespace `study_timer`.

@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 
-import config
+from study_timer import config
 
 
 def load_subjects():

@@ -10,10 +10,10 @@ def test_preview_uses_short_durations_and_separate_storage(tmp_path):
 from pathlib import Path
 import os
 import customtkinter as ctk
-import config
-import gui
-import session_repository as repository
-
+from study_timer import config
+from study_timer.ui import main_window as gui
+from study_timer.app import run_app
+from study_timer import session_repository as repository
 assert config.PREVIEW_MODE
 assert config.POMODORO_FOCUS_SECONDS == 10
 assert config.POMODORO_SHORT_BREAK_SECONDS == 5
@@ -41,7 +41,7 @@ def inspect(app):
     finally:
         app.destroy()
 ctk.CTk.mainloop = inspect
-gui.run_app()
+run_app()
 '''
     result = subprocess.run([sys.executable, "-c", script], env=environment,
                             cwd=Path(__file__).resolve().parents[1], capture_output=True,

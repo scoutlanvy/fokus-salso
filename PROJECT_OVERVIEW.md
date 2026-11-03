@@ -5,15 +5,30 @@ preview usage, and database paths are documented in [README.md](README.md).
 
 ## Main Components
 
-- `main.py`: application entry point.
-- `gui.py`: dashboard, timer controls, and Pomodoro decisions.
-- `duration_picker.py`: editable Hours/Minutes/Seconds columns.
-- `timer_service.py`: countdown, phase transitions, pause/resume, and alarm.
-- `session_repository.py`: SQLite persistence and queries.
-- `history_panel.py`: subject summaries and recent sessions.
-- `config.py`: timezone, storage paths, subjects, durations, and theme values.
-- `subject_store.py`: default and custom subject choices, atomically saved to `subjects.json` in the selected data directory without changing the session database.
-- `instance_lock.py`: Windows named mutex keyed by the resolved database path.
+- `main.py`: stable application entry point used by both root VBS launchers.
+- `study_timer/app.py`: startup and database mutex, acquired before UI/storage initialization.
+- `study_timer/ui/main_window.py`: dashboard layout, timer controls, UI event queue, and Pomodoro decisions.
+- `study_timer/ui/dialogs.py`: Settings and Choose Duration modal dialogs.
+- `study_timer/ui/subject_menu.py`: subject popup, context menu, and native Windows dismissal hook.
+- `study_timer/ui/duration_picker.py`: editable Hours/Minutes/Seconds columns.
+- `study_timer/ui/history_panel.py`: subject summaries and recent sessions.
+- `study_timer/timer_service.py`: countdown, phase transitions, worker synchronization, pause/resume, recovery, and storage retries.
+- `study_timer/audio.py`: Windows playback and cached tick-volume WAV conversion. The service retains playback synchronization and scheduling.
+- `study_timer/models.py`: immutable `ActiveTimer` checkpoint shared by service and persistence.
+- `study_timer/session_repository.py`: SQLite queries and atomic operations spanning history, progress, rewards, and settings.
+- `study_timer/schema.py`: schema creation and migrations on the repository's connection; never opens or commits a separate transaction. Existing migration behavior and ordering are preserved.
+- `study_timer/config.py`: timezone, storage paths, asset paths, subjects, durations, and theme values.
+- `study_timer/subject_store.py`: default and custom subject choices, atomically saved to `subjects.json` in the selected data directory without changing the session database.
+- `study_timer/instance_lock.py`: Windows named mutex keyed by the resolved database path.
+- `study_timer/assets/`: unchanged bundled `alarm.wav` and `tick.wav`.
+- Root `timer.ico`: retained for existing local shortcut compatibility.
+- `requirements.txt` / `requirements-dev.txt`: runtime and development dependencies.
+
+All internal imports use the `study_timer` namespace, including Python scripts
+embedded in subprocess tests. Run tests from the project root. The launchers
+continue to resolve `.venv/Scripts/pythonw.exe` and `main.py` from their own location.
+Audio paths resolve from the package directory and the icon from the project root,
+independent of the current working directory. User storage paths are unchanged.
 
 ## Storage and Failure Handling
 
@@ -112,7 +127,7 @@ or process death. Normal and preview paths use different mutexes and databases.
 
 The window title and main heading use Timer; preview windows use Timer - TEST MODE.
 `timer.ico` supplies multiple icon sizes for Windows. `config.APP_ICON` resolves
-it beside the code, and main/error windows set it explicitly before displaying.
+it in the project root, and main/error windows set it explicitly before displaying.
 Local shortcuts can reference this file for their icons. Machine-specific `.lnk`
 files are excluded from the repository and created locally as needed.
 
@@ -254,9 +269,9 @@ returns to idle. `POMODORO_ALLOW_SKIP_LONG_BREAK` no longer controls banked brea
 
 ## History
 
-Summary shows total duration and session count per subject, sorted by most sessions.
+Summary shows total duration and session count per subject, sorted by total duration descending.
 Recent Sessions shows the latest 30 sessions with time, subject, and duration.
-The panel queries SQLite directly, shows an empty state when needed, and refreshes
+The panel reads SQLite through the repository, shows an empty state when needed, and refreshes
 after a session saves successfully.
 Successful Reset also refreshes history immediately, keeping the selected subject.
 

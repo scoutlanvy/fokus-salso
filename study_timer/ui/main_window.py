@@ -1,216 +1,17 @@
 import customtkinter as ctk
 import queue
-import sqlite3
-import sys
-from contextlib import contextmanager
-from tkinter import Menu, Toplevel, messagebox
+from tkinter import Menu, messagebox
 
-import config
-from duration_picker import DurationPicker
-from history_panel import HistoryPanel
-from timer_service import TimerService
-from instance_lock import InstanceLock, AlreadyRunningError
-import subject_store
+from study_timer import config
+from study_timer.ui.duration_picker import DurationPicker
+from study_timer.ui.history_panel import HistoryPanel
+from study_timer.timer_service import TimerService
+from study_timer.ui.subject_menu import SubjectOptionMenu
+from study_timer.ui.dialogs import create_settings_dialog, create_break_duration_dialog
+from study_timer import subject_store
 
 
-class SubjectOptionMenu(ctk.CTkOptionMenu):
-    """Use Tk widgets for subject rows so Windows delivers right-click events."""
-
-    def __init__(self, *args, context_command, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.context_command = context_command
-        self.subject_popup = None
-        self.subject_rows = {}
-        self.context_menu = None
-        self._restore_subject_popup = True
-
-    def close_subject_popup(self):
-        if self.context_menu is not None:
-            menu, self.context_menu = self.context_menu, None
-            menu.unpost()
-            menu.grab_release()
-        if self.subject_popup is not None:
-            self.subject_popup.grab_release()
-            self.subject_popup.destroy()
-            self.subject_popup = None
-            self.subject_rows = {}
-
-    def _clicked(self, event=None):
-        if self.subject_popup is not None:
-            self.close_subject_popup()
-        elif self.cget("state") != ctk.DISABLED:
-            # CTk's global Button-1 handler focuses the clicked control. Wait for
-            # that handler before moving focus into the popup, or FocusOut closes it.
-            self.after_idle(self._open_dropdown_menu)
-
-    def _open_dropdown_menu(self):
-        if self.cget("state") == ctk.DISABLED:
-            return
-        self.close_subject_popup()
-        popup = self.subject_popup = Toplevel(self)
-        popup.withdraw()
-        popup.overrideredirect(True)
-        popup.transient(self.winfo_toplevel())
-        width = max(self.winfo_width(), 220)
-        height = round(self._apply_widget_scaling(min(300, len(self.cget("values")) * 36 + 12)))
-        x = min(self.winfo_rootx(), self.winfo_screenwidth() - width)
-        y = self.winfo_rooty() + self.winfo_height()
-        if y + height > self.winfo_screenheight():
-            y = max(0, self.winfo_rooty() - height)
-        popup.geometry(f"{width}x{height}+{max(0, x)}+{y}")
-        rows = ctk.CTkScrollableFrame(popup, corner_radius=0)
-        rows.pack(fill="both", expand=True)
-        for name in self.cget("values"):
-            row = ctk.CTkButton(
-                rows, text=name, anchor="w", height=30, fg_color="transparent",
-                command=lambda name=name: self._select_subject(name),
-            )
-            row.pack(fill="x", pady=2)
-            row.bind("<Button-3>", lambda event, name=name: self._context_subject(event, name))
-            self.subject_rows[name] = row
-        popup.bind("<Escape>", lambda event: self.close_subject_popup())
-        popup.bind("<Button-1>", self._outside_subject_popup)
-        popup.bind("<FocusOut>", lambda event: self.after_idle(self._check_popup_focus))
-        popup.deiconify()
-        popup.update_idletasks()
-        popup.grab_set()
-        popup.focus_force()
-
-    def _outside_subject_popup(self, event):
-        popup = self.subject_popup
-        if popup is not None and not (
-            popup.winfo_rootx() <= event.x_root < popup.winfo_rootx() + popup.winfo_width()
-            and popup.winfo_rooty() <= event.y_root < popup.winfo_rooty() + popup.winfo_height()
-        ):
-            self.close_subject_popup()
-            return "break"
-
-    def _check_popup_focus(self):
-        if self.context_menu is not None:
-            return
-        popup = self.subject_popup
-        if popup is not None:
-            focus = self.focus_get()
-            if focus is None or focus.winfo_toplevel() != popup:
-                self.close_subject_popup()
-
-    def _select_subject(self, name):
-        self.close_subject_popup()
-        self._dropdown_callback(name)
-
-    def _context_subject(self, event, name):
-        row = self.subject_rows[name]
-        x, y = row.winfo_rootx() + row.winfo_width(), row.winfo_rooty()
-        self.context_command(name, x, y)
-        return "break"
-
-    def post_context_menu(self, menu, x, y):
-        self.context_menu = menu
-        self._restore_subject_popup = True
-        self.subject_popup.grab_release()
-        menu.bind("<Unmap>", lambda event: self.after_idle(lambda: self._finish_context_menu(menu)))
-        menu.bind("<Escape>", self._cancel_context_menu)
-        menu.bind("<ButtonPress-1>", self._context_menu_click)
-        try:
-            with self._native_context_dismissal():
-                menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
-            if not menu.winfo_ismapped():
-                self._finish_context_menu(menu)
-
-    @contextmanager
-    def _native_context_dismissal(self):
-        """Native Windows menus consume outside clicks before Tk bindings see them."""
-        if sys.platform != "win32":
-            yield
-            return
-        import ctypes
-        from ctypes import wintypes
-
-        popup = self.subject_popup
-        bounds = (popup.winfo_rootx(), popup.winfo_rooty(),
-                  popup.winfo_rootx() + popup.winfo_width(),
-                  popup.winfo_rooty() + popup.winfo_height())
-        user32 = ctypes.windll.user32
-        callback_type = ctypes.WINFUNCTYPE(wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
-        user32.SetWindowsHookExW.argtypes = [ctypes.c_int, callback_type, wintypes.HINSTANCE, wintypes.DWORD]
-        user32.SetWindowsHookExW.restype = ctypes.c_void_p
-        user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
-        user32.CallNextHookEx.restype = wintypes.LPARAM
-        user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
-
-        @callback_type
-        def watch(code, wparam, lparam):
-            if code == 2:  # MSGF_MENU, limited to this thread's menu modal loop.
-                message = ctypes.cast(lparam, ctypes.POINTER(wintypes.MSG)).contents
-                if message.message in (0x201, 0x204):  # left/right mouse down
-                    point = wintypes.POINT(ctypes.c_short(message.lParam & 0xffff).value,
-                                           ctypes.c_short((message.lParam >> 16) & 0xffff).value)
-                    user32.ClientToScreen(message.hWnd, ctypes.byref(point))
-                    rect = wintypes.RECT()
-                    user32.GetWindowRect(message.hWnd, ctypes.byref(rect))
-                    in_menu = rect.left <= point.x < rect.right and rect.top <= point.y < rect.bottom
-                    in_list = bounds[0] <= point.x < bounds[2] and bounds[1] <= point.y < bounds[3]
-                    self._restore_subject_popup = in_menu or in_list
-                elif message.message == 0x100 and message.wParam == 0x1B:
-                    self._restore_subject_popup = True
-            return user32.CallNextHookEx(None, code, wparam, lparam)
-
-        hook = user32.SetWindowsHookExW(-1, watch, None, ctypes.windll.kernel32.GetCurrentThreadId())
-        try:
-            yield
-        finally:
-            if hook:
-                user32.UnhookWindowsHookEx(hook)
-
-    def _cancel_context_menu(self, event):
-        self._restore_subject_popup = True
-        if self.context_menu is not None:
-            self.context_menu.unpost()
-        return "break"
-
-    def _context_menu_click(self, event):
-        menu = self.context_menu
-        if menu is not None and not (
-            menu.winfo_rootx() <= event.x_root < menu.winfo_rootx() + menu.winfo_width()
-            and menu.winfo_rooty() <= event.y_root < menu.winfo_rooty() + menu.winfo_height()
-        ):
-            popup = self.subject_popup
-            self._restore_subject_popup = popup is not None and (
-                popup.winfo_rootx() <= event.x_root < popup.winfo_rootx() + popup.winfo_width()
-                and popup.winfo_rooty() <= event.y_root < popup.winfo_rooty() + popup.winfo_height()
-            )
-            menu.unpost()
-            return "break"
-
-    def _finish_context_menu(self, menu):
-        if self.context_menu != menu:
-            return
-        self.context_menu = None
-        if self.subject_popup is not None:
-            if self._restore_subject_popup and self.cget("state") != ctk.DISABLED:
-                self.subject_popup.grab_set()
-                self.subject_popup.focus_force()
-            else:
-                self.close_subject_popup()
-
-
-def run_app() -> None:
-    try:
-        with InstanceLock(config.DATABASE_PATH):
-            _run_app()
-    except (AlreadyRunningError, OSError) as error:
-        root = ctk.CTk()
-        root.iconbitmap(default=str(config.APP_ICON))
-        root.withdraw()
-        try:
-            messagebox.showerror(config.APP_TITLE, str(error), parent=root)
-        finally:
-            root.destroy()
-
-
-def _run_app() -> None:
+def build_main_window() -> None:
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
 
@@ -353,73 +154,17 @@ def _run_app() -> None:
         if settings_dialog is not None and settings_dialog.winfo_exists():
             settings_dialog.focus()
             return
-        settings_dialog = dialog = ctk.CTkToplevel(app)
-        dialog.title("Settings")
-        dialog.geometry("460x550")
-        dialog.resizable(False, False)
-        dialog.transient(app)
-        dialog.grab_set()
-        selected_scope = ctk.StringVar(master=dialog, value=timer_service.focus_scope)
-        selected_tick = ctk.BooleanVar(master=dialog, value=timer_service.tick_sound_enabled)
-        settings_controls.clear()
-        ctk.CTkLabel(dialog, text="Pomodoro progress", font=("Helvetica", 18, "bold")).pack(
-            anchor="w", padx=20, pady=(18, 12))
-        for value, title, explanation in (
-            ("shared", "Shared across subjects", "Keep the same remaining target when you change subjects."),
-            ("per_subject", "Per subject", "Each subject keeps its own remaining target."),
-        ):
-            radio = ctk.CTkRadioButton(dialog, text=title, variable=selected_scope, value=value)
-            radio.pack(anchor="w", padx=20, pady=(8, 2))
-            settings_controls.append(radio)
-            ctk.CTkLabel(dialog, text=explanation, wraplength=410, justify="left").pack(
-                anchor="w", padx=20, pady=(0, 4))
-        ctk.CTkLabel(dialog, text="Both options keep their progress separately.\nSwitching back resumes the progress saved there.",
-                     wraplength=410, justify="left").pack(anchor="w", padx=20, pady=(8, 0))
-        ctk.CTkLabel(dialog, text="Timer sound", font=("Helvetica", 16, "bold")).pack(
-            anchor="w", padx=20, pady=(16, 4))
-        tick_switch = ctk.CTkSwitch(dialog, text="Tick every second", variable=selected_tick,
-                                    onvalue=True, offvalue=False)
-        tick_switch.pack(anchor="w", padx=20, pady=4)
-        settings_controls.append(tick_switch)
-        volume_label = ctk.CTkLabel(dialog, text=f"Tick volume: {timer_service.tick_volume}%")
-        volume_label.pack(anchor="w", padx=20, pady=(8, 0))
-        volume_slider = ctk.CTkSlider(
-            dialog, from_=0, to=400, number_of_steps=400,
-            command=lambda value: volume_label.configure(text=f"Tick volume: {round(value)}%"))
-        volume_slider.set(timer_service.tick_volume)
-        volume_slider.pack(fill="x", padx=20, pady=(4, 8))
-        settings_controls.append(volume_slider)
-        ctk.CTkLabel(dialog, text="100% = original volume; above 100% boosts the tick.",
-                     wraplength=410, justify="left").pack(anchor="w", padx=20, pady=(0, 4))
-        error_label = ctk.CTkLabel(dialog, text="", text_color=("#b00020", "#ff8888"), wraplength=410)
-        error_label.pack(fill="x", padx=20, pady=4)
 
-        def cancel():
-            nonlocal settings_dialog
-            dialog.destroy()
-            settings_dialog = None
-            settings_controls.clear()
-
-        def save():
-            try:
-                remaining = timer_service.change_focus_scope(
-                    selected_scope.get(), selected_subject.get(), selected_tick.get(), round(volume_slider.get()))
-            except (OSError, sqlite3.Error, ValueError) as error:
-                error_label.configure(text=f"Could not save Settings: {error}")
-                return
+        def on_saved(remaining):
             pomodoro_info.configure(text=pomodoro_description())
             refresh_focus_target(idle_remaining=remaining)
-            cancel()
 
-        actions = ctk.CTkFrame(dialog, fg_color="transparent")
-        actions.pack(side="bottom", fill="x", padx=20, pady=(8, 18))
-        save_button = ctk.CTkButton(actions, text="Save", command=save)
-        save_button.pack(side="right", padx=(8, 0))
-        settings_controls.append(save_button)
-        ctk.CTkButton(actions, text="Cancel", command=cancel).pack(side="right")
-        dialog.protocol("WM_DELETE_WINDOW", cancel)
-        dialog.bind("<Escape>", lambda event: cancel())
-        dialog.bind("<Return>", lambda event: save())
+        def on_cancel():
+            nonlocal settings_dialog
+            settings_dialog = None
+
+        settings_dialog = create_settings_dialog(
+            app, timer_service, selected_subject, on_saved, on_cancel, settings_controls)
 
     def show_storage_error(message: str) -> None:
         if closing:
@@ -595,47 +340,7 @@ def _run_app() -> None:
         if duration_dialog is not None and duration_dialog.winfo_exists():
             duration_dialog.focus()
             return
-        duration_dialog = dialog = ctk.CTkToplevel(app)
-        dialog.title("Choose break duration")
-        dialog.geometry("370x260")
-        dialog.resizable(False, False)
-        dialog.transient(app)
-        dialog.grab_set()
-        ctk.CTkLabel(dialog, text=f"Available: {timer_service.format_hms(timer_service.break_balance_seconds)}").pack(pady=(12, 8))
-        inputs = ctk.CTkFrame(dialog, fg_color="transparent")
-        inputs.pack()
-        entries = []
-        for index, name in enumerate(("Hours", "Minutes", "Seconds")):
-            ctk.CTkLabel(inputs, text=name).grid(row=0, column=index, padx=6)
-            entry = ctk.CTkEntry(inputs, width=80, justify="center")
-            entry.insert(0, "00")
-            entry.grid(row=1, column=index, padx=6)
-            entries.append(entry)
-        error_label = ctk.CTkLabel(dialog, text="", text_color=("#b00020", "#ff8888"), wraplength=330)
-        error_label.pack(pady=8)
-
-        def confirm():
-            try:
-                values = [entry.get().strip() for entry in entries]
-                if any(not value.isascii() or not value.isdigit() for value in values):
-                    raise ValueError
-                hours, minutes, seconds = map(int, values)
-                total = hours * 3600 + minutes * 60 + seconds
-                if not (0 <= minutes < 60 and 0 <= seconds < 60 and 0 < total <= timer_service.break_balance_seconds):
-                    raise ValueError
-            except ValueError:
-                error_label.configure(text="Enter a duration above zero and within your balance (minutes/seconds 0-59).")
-                return
-            if use_break(total):
-                dialog.destroy()
-            else:
-                error_label.configure(text="Break unavailable. Close and try again.")
-
-        ctk.CTkButton(dialog, text="Start Break", command=confirm).pack(pady=4)
-        ctk.CTkButton(dialog, text="Cancel", command=dialog.destroy).pack(pady=4)
-        dialog.bind("<Escape>", lambda event: dialog.destroy())
-        dialog.bind("<Return>", lambda event: confirm())
-        entries[0].focus_set()
+        duration_dialog = create_break_duration_dialog(app, timer_service, use_break)
 
     def add_subject():
         if timer_service.is_running or timer_service.storage_blocked:
