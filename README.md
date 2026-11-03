@@ -1,135 +1,127 @@
-# Timer
+# Study Timer
 
-Aplikasi desktop Windows untuk mencatat waktu belajar dengan timer manual dan Pomodoro. Riwayat disimpan secara lokal menggunakan SQLite, tanpa koneksi ke layanan eksternal. Antarmuka aplikasi menggunakan bahasa Inggris.
+**English** | [Bahasa Indonesia](README.id.md)
 
-## Fitur
+A Windows desktop application for tracking study time with a manual timer and Pomodoro sessions. History is stored locally in SQLite, with no connection to external services. The application interface is in English.
 
-- Timer manual dengan pengaturan jam, menit, dan detik.
-- Pomodoro: fokus 25 menit dengan kredit istirahat 5, 5, 5, lalu 15 menit secara berulang.
-- Saldo istirahat tersimpan dan dapat digunakan sesuai kebutuhan.
-- Settings untuk memilih progres Pomodoro bersama atau terpisah per subjek.
-- Pilihan subjek belajar, ringkasan per subjek, dan 30 sesi terbaru.
-- Pause, Resume, Reset, Skip Break, serta alarm yang berbunyi sampai dihentikan.
-- Tema terang dan gelap.
+## Features
 
-## Instalasi
+- Manual timer with hours, minutes, and seconds.
+- Pomodoro: 25-minute focus targets with repeating break rewards of 5, 5, 5, and 15 minutes.
+- Persistent break balance that you can use when needed.
+- Settings for shared or per-subject Pomodoro progress.
+- Study subjects, per-subject summaries, and the 30 most recent sessions.
+- Pause, Resume, Reset, Skip Break, and an alarm that rings until acknowledged.
+- Light and dark theme support.
 
-Gunakan Windows dengan Python 3.9 atau lebih baru beserta Tkinter. Jalankan perintah berikut di PowerShell dari folder proyek:
+## Installation
+
+Use Windows with Python 3.9 or newer and Tkinter. Download or clone the repository, then run these commands in PowerShell from the project folder:
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-`tzdata` menyediakan data zona waktu untuk pencatatan sesi dalam `Asia/Jakarta`.
+`tzdata` supplies timezone data for recording sessions in `Asia/Jakarta`.
 
-## Menjalankan aplikasi
+## Running the application
 
-Klik dua kali `Study Timer.vbs` untuk membuka aplikasi tanpa jendela terminal. Launcher harus tetap berada di folder proyek dan menggunakan Python dari `.venv`.
+Double-click `Study Timer.vbs` to open the application without a terminal window. Keep the launcher in the project folder; it uses Python from `.venv`.
 
-Untuk menyematkan aplikasi ke taskbar, buat pintasan lokal ke
-`.venv\Scripts\pythonw.exe` dengan argumen path lengkap `main.py`,
-Start in folder proyek, dan ikon `timer.ico`. Pintasan `.lnk` tidak
-disertakan dalam repositori karena menyimpan path komputer lokal.
+To pin the application to the taskbar, create a local shortcut to `.venv\Scripts\pythonw.exe`, pass the full path to `main.py` as its argument, set **Start in** to the project folder, and use `timer.ico` as the icon. Machine-specific `.lnk` files are not included in the repository.
 
-Atau jalankan dari PowerShell:
+Alternatively, run it from PowerShell:
 
 ```powershell
 .\.venv\Scripts\python.exe main.py
 ```
 
-Tanpa progres tersimpan, aplikasi dibuka dalam mode **Pomodoro**, dengan fokus 25 menit yang menunggu tombol **Start** ditekan. Pilih subjek jika diperlukan. Untuk mode Manual, pilih **Manual** dan atur durasi terlebih dahulu. Setelah alarm Pomodoro dihentikan dengan **Stop Alarm**, pilih **Continue Focus** atau gunakan saldo istirahat. Fase berikutnya menunggu pilihan pengguna.
+Without saved progress, the application opens in **Pomodoro** mode with a 25-minute focus target waiting for **Start**. Choose a subject if needed. For a manual timer, select **Manual** and set a duration first. After acknowledging a Pomodoro alarm with **Stop Alarm**, choose **Continue Focus** or use your break balance. The next phase waits for your choice.
 
-Tekan **Space** saat jendela aplikasi aktif untuk **Pause/Resume** timer Manual, fokus Pomodoro, atau istirahat. Space tidak memulai timer, menghentikan alarm, atau memilih sesi berikutnya. Saat mengetik di kolom input, Space tetap berfungsi sebagai spasi. Menahan tombol hanya mengubah status sekali.
+Press **Space** while the main window is active to **Pause/Resume** a Manual, focus, or break countdown. Space does not start a timer, stop an alarm, or choose the next session. In text inputs, Space remains a normal space. Holding the key changes the state only once.
 
-Panel riwayat tersembunyi setiap aplikasi dibuka. Klik **Show History** di dekat judul untuk menampilkan ringkasan dan sesi terbaru, atau **Hide History** untuk memberi seluruh lebar area kepada timer. Tombol ini dapat digunakan saat timer berjalan maupun paused, tanpa mengubah progres. Tab riwayat yang dipilih tetap dipertahankan selama aplikasi terbuka.
+History starts hidden on every launch. Click **Show History** beside the heading to display summaries and recent sessions, or **Hide History** to give the timer the available width. You can toggle history while running or paused without changing progress. The selected history tab is preserved while the application is open.
 
-Untuk menambah subjek, klik **+** di samping pilihan **Subject** saat timer belum aktif, masukkan nama, lalu klik **OK**. Subjek langsung terpilih dan tersimpan untuk penggunaan berikutnya. Nama kosong ditolak; nama yang sama (tanpa membedakan huruf besar/kecil) memilih subjek yang sudah ada. Daftar disimpan di `subjects.json` dalam direktori data normal atau percobaan masing-masing, terpisah dari database riwayat.
+To add a subject, click **+** beside **Subject** while the timer is idle, enter a name, and click **OK**. The subject is selected immediately and saved for future launches. Blank names are rejected; case-insensitive duplicates select the existing spelling. Choices are stored in `subjects.json` in the normal or preview data directory, separate from the history database.
 
-Untuk menghapus subjek dari daftar, pilih subjek lalu klik **−** dan konfirmasi. Anda juga bisa membuka daftar Subject, klik kanan pada subjek, lalu pilih **Hapus**. Klik kanan tidak mengubah pilihan Subject dan daftar tetap terlihat selama menu Hapus terbuka. Tekan Escape untuk kembali ke daftar; klik di luar daftar dan menu untuk menutup keduanya. Memilih Hapus menutup kedua popup sebelum konfirmasi. Semua subjek kecuali **Umum** dapat dihapus; pilihan kembali ke **Umum**. Riwayat sesi tetap tersimpan dan muncul lagi jika subjek ditambahkan kembali dengan nama yang sama. Progres target bersama tidak berubah. Penghapusan tidak tersedia saat timer aktif atau dijeda, atau penyimpanan bermasalah.
+To remove a subject from the list, select it, click **?**, and confirm. You can also open the Subject dropdown, right-click a subject, and choose **Hapus** (Delete). Right-clicking does not change the selected subject, and the list stays visible while its context menu is open. Escape returns to the list; clicking outside both popups closes them. Choosing Hapus closes both popups before confirmation. Every subject except **Umum** can be removed; selection then returns to Umum. Session history is kept and remains associated with the same subject name if you add it again. Shared target progress is unchanged. Removal is unavailable while the timer is active or paused, or storage is blocked.
 
-Saat fokus Pomodoro **paused**, gunakan **Break** untuk memakai seluruh saldo atau **Choose Duration** untuk memilih durasi. Setelah break selesai dan alarm dihentikan, atau setelah **Skip Break**, sisa fokus kembali paused. Klik **Resume** saat siap. Menutup aplikasi selama break tetap menyimpan sisa break dan fokus tersebut.
+While a Pomodoro focus is **paused**, use **Break** to spend the full balance or **Choose Duration** to select a duration. After the break finishes and its alarm is acknowledged, or after **Skip Break**, the remaining focus returns paused. Click **Resume** when ready. Closing the application during the break preserves both the remaining break and the suspended focus.
 
-## Settings progres Pomodoro
+## Pomodoro progress settings
 
-Klik **Settings** di dekat **Show History**, pilih salah satu, lalu klik **Save**:
+Click **Settings** beside **Show History**, choose an option, and click **Save**:
 
-- **Shared across subjects** (default): semua subjek melanjutkan sisa target yang sama.
-- **Per subject**: setiap subjek memiliki sisa target sendiri. Saat pertama memakai pilihan ini, setiap subjek mulai dari 25 menit.
+- **Shared across subjects** (default): all subjects continue the same remaining target.
+- **Per subject**: each subject keeps its own target. Subjects without progress start at 25 minutes.
 
-Kedua pilihan menyimpan progres masing-masing. Misalnya, Bersama tersisa **18:00**; beralih ke Per subject Anki yang belum dipakai menampilkan **25:00**. Jika kembali ke Bersama, sisanya tetap **18:00**. Progres tidak dipindahkan atau digandakan saat mengganti pilihan. Pilihan dan kedua simpanan progres tetap ada setelah aplikasi ditutup. Data progres per subjek dari versi lama tetap diarsipkan dan tidak dimasukkan ke simpanan Per subject yang baru, agar progres yang pernah dibawa ke Bersama tidak dihitung kembali.
+Both options retain their progress independently. For example, if the shared target has **18:00** remaining, switching to a previously unused per-subject Anki target shows **25:00**. Switching back to Shared restores **18:00**. Switching does not transfer or duplicate progress. The preference and both sets of progress survive restarts. Legacy per-subject progress remains archived and is not imported into the new Per subject storage, preventing progress previously carried into Shared from being counted again.
 
-Settings hanya dapat diubah saat timer tidak aktif. Saat timer berjalan, paused, break, alarm, atau menunggu **Continue Focus**, selesaikan atau **Reset** timer terlebih dahulu. Jika penyimpanan bermasalah, pulihkan dulu aksesnya. **Cancel**, Escape, atau menutup dialog membatalkan pilihan yang belum disimpan. Jika Save gagal, dialog menampilkan kesalahan dan pilihan sebelumnya tetap dipakai; Save dapat dicoba lagi.
+Settings can only change while the timer is idle. While running, paused, on a break, sounding an alarm, or waiting for **Continue Focus**, finish or **Reset** the timer first. Resolve storage problems before changing settings. **Cancel**, Escape, or closing the dialog discards unsaved choices. If Save fails, the dialog shows an error and keeps the previous preferences; you can retry Save.
 
-Untuk bunyi tik di semua mode, aktifkan **Tick every second**, lalu atur slider
-**Tick volume** dari **0–400%** dan klik **Save**. Nilai 0% membisukan tik,
-100% memakai volume asli, dan di atas 100% memperkeras bunyi tik. Pilihan
-On/Off dan volume tetap tersimpan setelah aplikasi ditutup dan dibuka kembali.
-Volume ini hanya mengatur tik, tanpa mengubah volume alarm atau Windows.
+For ticking in every countdown mode, enable **Tick every second**, set **Tick volume** between **0?400%**, and click **Save**. Zero mutes ticking, 100% uses the original volume, and higher values boost it. On/Off and volume preferences survive restarts. This control affects only ticking, leaving the alarm and Windows volume unchanged.
 
-History tetap mencatat waktu per subjek. Saldo break dan urutan hadiah tetap bersama untuk kedua pilihan. Pengaturan ini tidak mengubah durasi Manual. Mode percobaan menyimpan pilihan dan progresnya sendiri.
+History still records time by subject. Break balance and the reward cycle remain shared under both options. These settings do not change the Manual duration. Preview mode stores its own settings and progress.
 
-## Mencoba Pomodoro dengan cepat
+## Trying Pomodoro quickly
 
-Klik dua kali `Coba Pomodoro.vbs`. Mode ini memakai fokus 10 detik dan kredit istirahat 5, 5, 5, lalu 15 detik. Data percobaan disimpan terpisah. Tutup jendelanya dan buka `Study Timer.vbs` untuk kembali ke mode normal.
+Double-click `Coba Pomodoro.vbs`. Preview mode uses 10-second focus targets and break rewards of 5, 5, 5, and 15 seconds. Preview data is stored separately. Close its window and open `Study Timer.vbs` to return to normal mode.
 
-## Penyimpanan data
+## Data storage
 
-- Data normal: `%LOCALAPPDATA%\StudyTimer\study_sessions.sqlite3`
-- Data percobaan: `%LOCALAPPDATA%\StudyTimerPreview\study_sessions.sqlite3`
+- Normal data: `%LOCALAPPDATA%\StudyTimer\study_sessions.sqlite3`
+- Preview data: `%LOCALAPPDATA%\StudyTimerPreview\study_sessions.sqlite3`
 
-Riwayat, saldo istirahat, posisi siklus Pomodoro, dan progres timer tersimpan setelah aplikasi ditutup. Untuk membuat cadangan, tutup aplikasi lalu salin file database normal ke lokasi lain.
+History, break balance, reward-cycle position, and timer progress survive restarts. To back up the database, close the application and copy the normal database file elsewhere.
 
-## Melanjutkan progres
+## Resuming progress
 
-Progres Manual, fokus Pomodoro, dan istirahat disimpan setiap detik. Jika aplikasi ditutup pada `24:52`, saat dibuka kembali sisa waktunya tetap `24:52` dalam keadaan **Pause**. Tekan **Resume** untuk melanjutkan; waktu selama aplikasi tertutup tidak dihitung. Mode dan subjek ikut dipulihkan dan terkunci selama sesi aktif.
+Manual, Pomodoro focus, and break countdowns save progress every second. If you close the application at `24:52`, it reopens at `24:52` in a paused state. Press **Resume** to continue; time while the application is closed is not counted. The mode and subject are restored and remain locked during the active session.
 
-Progres juga dipulihkan dari detik terakhir yang berhasil disimpan jika aplikasi crash atau komputer mati mendadak. **Reset** pada Pomodoro otomatis mencatat waktu fokus yang sudah dijalani dan mengumpulkannya menuju target 25 menit sesuai pilihan di Settings. Contohnya, setelah belajar **14:53**, Reset mencatat bagian itu ke riwayat dan timer menampilkan sisa **10:07**, menunggu **Start**. Setelah sisa itu selesai, total fokus mencapai 25 menit, bonus istirahat diberikan sekali, dan target berikutnya kembali **25:00**. Riwayat mencatat **14:53 + 10:07**, tanpa menghitung waktu yang sama dua kali. Reset berulang tanpa belajar tidak mengurangi progres.
+After a crash or sudden shutdown, recovery uses the last successfully saved second. **Reset** during Pomodoro records elapsed focus time in history and accumulates it toward the 25-minute target in the selected settings scope. For example, after studying for **14:53**, Reset records that segment and displays **10:07** remaining, waiting for **Start**. Completing the remainder reaches the target, awards one break reward, and starts a fresh **25:00** target. History contains **14:53 + 10:07**, without counting the same time twice. Repeated Reset without more study does not reduce the target.
 
-Secara default, **Shared across subjects** memakai satu progres target: mengganti dari Umum ke Anki tidak mengubah sisa waktu. Contohnya, belajar Umum **7 menit**, lalu Reset dan pindah ke Anki: sisa timer tetap **18 menit**. Menyelesaikan 18 menit di Anki memberikan satu bonus istirahat; riwayat mencatat Umum 7 menit dan Anki 18 menit. Target berikutnya kembali 25 menit.
+By default, **Shared across subjects** uses one target: switching from Umum to Anki does not change the remaining time. For example, study Umum for **7 minutes**, Reset, and switch to Anki: **18 minutes** remain. Completing those 18 minutes under Anki awards one break reward; history records Umum for 7 minutes and Anki for 18 minutes. The next target returns to 25 minutes.
 
-**Target progress** menunjukkan waktu terkumpul pada pilihan yang sedang dipakai ditambah fokus yang sedang berjalan. Akumulasi tetap tersimpan setelah aplikasi ditutup. Waktu paused, aplikasi tertutup, dan break tidak dihitung sebagai fokus. Jika Reset dilakukan saat break dengan fokus tertunda, hanya bagian fokus yang ditambahkan. Reset saat fokus sudah mencapai nol menyelesaikan target dan bonusnya sekali. Saldo istirahat dan urutan bonus 5, 5, 5, lalu 15 menit tetap bersama untuk semua subjek.
+**Target progress** combines saved accumulation in the selected scope with elapsed time in the current focus. Accumulation survives restarts. Paused time, offline time, and breaks do not count as focus. Reset during a break with a suspended focus records only that focus's elapsed portion. Reset at zero remaining completes the target and awards its reward once. Break balance and the 5, 5, 5, 15-minute reward cycle remain shared across subjects.
 
-Saat pertama beralih dari versi lama ke progres Bersama, progres lama **Umum** dilanjutkan sebagai progres bersama. Jika Umum sudah 6:55, semua subjek menampilkan sisa **18:05**. Jika tidak ada progres Umum, target dimulai penuh. Jika ada fokus lama yang masih aktif atau tersimpan selama break, sisa sesi tersebut dipertahankan beserta progres target yang mendasarinya. Migrasi hanya sekali; data progres lama subjek lain tetap tersimpan tetapi tidak digabungkan. Riwayat, saldo break, dan urutan bonus dipertahankan; riwayat lama tidak dihitung ulang.
+On the first upgrade from legacy progress storage to Shared, legacy **Umum** progress becomes the shared target. For example, 6:55 already recorded for Umum leaves **18:05** for every subject. Without Umum progress, the target starts full. If an old focus is still active or suspended during a break, its remaining time and carried target progress are preserved. Migration happens once. Other legacy subjects are kept but not merged. History, break balance, and cycle position are preserved; old history is not recalculated.
 
-Mode percobaan memakai aturan yang sama dengan target 10 detik dan penyimpanan terpisah. Jika sisa target tidak dapat dibaca, **Start** diganti **Retry**; klik untuk membaca ulang sebelum memulai.
+Preview mode follows the same rules with a 10-second target and separate storage. If the remaining target cannot be read, **Start** becomes **Retry**; click it to retry the read before starting.
 
-**Reset** pada mode Manual tetap membuang progres aktif dan kembali ke **00:00:00**. Riwayat sebelumnya serta daftar dan pilihan subjek tetap dipertahankan. Jika penyimpanan saat Reset gagal, progres tetap paused; perbaiki kendala penyimpanan lalu tekan **Reset** lagi.
+**Reset** in Manual mode discards active progress and returns to **00:00:00**. Existing history, subject choices, and the selected subject are preserved. If a Reset save fails, progress stays paused; fix the storage problem and press **Reset** again.
 
-Jika aplikasi ditutup saat alarm berbunyi, sesi yang sudah selesai tidak dicatat ulang dan alarm tidak diputar saat dibuka kembali. Pomodoro menampilkan pilihan sesi berikutnya; Manual kembali siap memulai.
+Closing the application while an alarm sounds does not duplicate the completed session or replay the alarm on restart. Pomodoro shows the next-session choices; Manual returns to idle.
 
-Jika penyimpanan gagal, timer berhenti sementara. Tekan **Resume** untuk mencoba kembali. Jika gagal menyimpan saat menutup, jendela tetap terbuka agar penutupan bisa dicoba lagi. Jika progres tidak dapat dibaca, kontrol timer dinonaktifkan untuk melindungi data tersimpan; tutup dan buka kembali setelah masalah penyimpanan diperbaiki.
+If saving fails, the timer pauses. Press **Resume** to retry. If saving during close fails, the window stays open so you can retry closing. If saved progress cannot be read, timer controls are disabled to protect it; resolve the storage problem, then close and reopen the application.
 
-Hanya satu jendela diizinkan untuk setiap database. Aplikasi normal dan mode percobaan tetap dapat dibuka bersamaan karena memakai database terpisah.
+Only one window is allowed per database. Normal and preview windows can run together because they use different databases.
 
-## Pemeriksaan untuk pengembangan
+## Development checks
 
-Pasang pytest, lalu jalankan pengujian dari folder proyek:
+Install development dependencies and run tests from the project folder:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Sebagian pengujian membuka jendela GUI sementara, sehingga membutuhkan sesi desktop Windows.
+Some tests open temporary GUI windows and require a Windows desktop session.
 
-Lihat [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) untuk rincian teknis dan [AGENTS.md](AGENTS.md) untuk panduan kerja AI.
+See [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md) for technical details and [AGENTS.md](AGENTS.md) for AI working instructions.
 
-## Struktur kode
+## Code structure
 
-`main.py` tetap menjadi entry point untuk PowerShell, kedua launcher VBS, dan
-pintasan lokal. Launcher tetap berada di root bersama `.venv` dan `timer.ico`.
-Package `study_timer/` harus ikut disalin ketika memindahkan proyek.
+`main.py` remains the entry point for PowerShell, both VBS launchers, and local shortcuts. Keep the launchers in the root alongside `.venv` and `timer.ico`. Include the `study_timer/` package when copying the project.
 
-- `study_timer/app.py`: startup dan mutex per database.
-- `study_timer/ui/`: jendela utama, dialog, dropdown subjek, input durasi, dan history.
-- `study_timer/timer_service.py`: countdown, transisi fase, recovery, dan retry.
-- `study_timer/audio.py` dan `study_timer/assets/`: playback dan audio bawaan.
-- `study_timer/models.py`: model checkpoint timer.
-- `study_timer/session_repository.py`: query dan transaksi SQLite.
-- `study_timer/schema.py`: pembuatan schema serta migrasi dalam transaksi repository.
-- `study_timer/subject_store.py`: penyimpanan daftar subjek JSON.
-- `study_timer/config.py` dan `study_timer/instance_lock.py`: konfigurasi dan mutex Windows.
+- `study_timer/app.py`: startup and per-database mutex.
+- `study_timer/ui/`: main window, dialogs, subject dropdown, duration input, and history.
+- `study_timer/timer_service.py`: countdown, phase transitions, recovery, and retries.
+- `study_timer/audio.py` and `study_timer/assets/`: playback and bundled audio.
+- `study_timer/models.py`: timer checkpoint model.
+- `study_timer/session_repository.py`: SQLite queries and transactions.
+- `study_timer/schema.py`: schema setup and migrations within repository transactions.
+- `study_timer/subject_store.py`: JSON subject-list persistence.
+- `study_timer/config.py` and `study_timer/instance_lock.py`: configuration and Windows mutex.
 
-Pemindahan kode tidak memindahkan database atau `subjects.json` pengguna.
-Import kode pengembangan sekarang menggunakan namespace `study_timer`.
+The code reorganization does not relocate user databases or `subjects.json`. Development imports use the `study_timer` namespace.
